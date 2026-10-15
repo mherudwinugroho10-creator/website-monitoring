@@ -8,9 +8,9 @@ export default function UserSidebar({ isOpen, setIsOpen }) {
   const navigate = useNavigate();
 
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: Activity, label: 'Live Monitoring', path: '/monitoring' },
-    { icon: FileText, label: 'Behavior Log', path: '/behavior-log' },
+    { icon: LayoutDashboard, label: 'Dashboard',      path: '/dashboard'    },
+    { icon: Activity,        label: 'Live Monitoring', path: '/monitoring'   },
+    { icon: FileText,        label: 'Behavior Log',    path: '/behavior-log' },
   ];
 
   async function handleLogout() {

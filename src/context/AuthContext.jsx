@@ -118,6 +118,18 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function updateUserProfile(updates) {
+    if (!currentUser) return { success: false, error: 'Belum login.' };
+    try {
+      await setDoc(doc(db, 'users', currentUser.uid), updates, { merge: true });
+      setUserData(function (prev) { return Object.assign({}, prev, updates); });
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      return { success: false, error: 'Gagal menyimpan perubahan.' };
+    }
+  }
+
   var value = {
     currentUser: currentUser,
     userData: userData,
@@ -125,6 +137,7 @@ export function AuthProvider({ children }) {
     register: register,
     login: login,
     logout: logout,
+    updateUserProfile: updateUserProfile,
   };
 
   return (

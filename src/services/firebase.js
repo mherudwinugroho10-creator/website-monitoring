@@ -25,4 +25,14 @@ export const db = getFirestore(app);
 // Realtime Database (untuk data sensor real-time dari ESP32)
 export const rtdb = getDatabase(app);
 
+// ── Instance KEDUA — khusus untuk membuat akun pengemudi baru dari halaman
+// Admin (ManageDrivers.jsx). createUserWithEmailAndPassword() secara otomatis
+// login sebagai user yang baru dibuat pada instance Auth yang dipakai — kalau
+// memakai firebaseAuth (instance utama), sesi admin yang sedang login akan
+// tergantikan oleh sesi driver baru itu. Dengan app kedua ini, proses buat
+// akun terjadi di "ruang" terpisah, lalu langsung di-signOut, sehingga sesi
+// admin di firebaseAuth (instance utama) tidak pernah tersentuh.
+const secondaryApp = initializeApp(firebaseConfig, 'Secondary');
+export const secondaryAuth = getAuth(secondaryApp);
+
 export default app;

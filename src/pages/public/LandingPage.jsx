@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import {
-  Truck, Shield, Activity, MapPin, Bell, BarChart3,
+  Truck, Shield, Activity, Bell, BarChart3,
   ArrowRight, Gauge, AlertTriangle, User,
   Radio, Database, Monitor
 } from 'lucide-react';
@@ -110,7 +110,7 @@ export default function LandingPage() {
               {
                 icon: AlertTriangle,
                 title: 'Deteksi Kemiringan',
-                desc: 'Sensor MPU6050 mendeteksi kemiringan (pitch) dan kemiringan samping (roll) kendaraan untuk mencegah risiko terguling di medan berbukit.',
+                desc: 'Sensor MPU9250 mendeteksi kemiringan (pitch) dan kemiringan samping (roll) kendaraan untuk mencegah risiko terguling di medan berbukit.',
                 color: 'text-amber-400',
                 bg: 'bg-amber-500/10',
               },
@@ -120,13 +120,6 @@ export default function LandingPage() {
                 desc: 'Pencatatan perilaku berkendara secara otomatis setiap menit mencakup data kecepatan, pengereman, akselerasi, deselerasi, dan kemiringan.',
                 color: 'text-emerald-400',
                 bg: 'bg-emerald-500/10',
-              },
-              {
-                icon: MapPin,
-                title: 'Pelacakan GPS Real-Time',
-                desc: 'Tracking posisi kendaraan menggunakan modul GPS NEO-6M yang ditampilkan pada peta interaktif secara langsung di dashboard.',
-                color: 'text-cyan-400',
-                bg: 'bg-cyan-500/10',
               },
               {
                 icon: Bell,
@@ -177,9 +170,9 @@ export default function LandingPage() {
               <div className="space-y-2">
                 {[
                   { name: 'ESP32 DevKit V1', desc: 'Mikrokontroler' },
-                  { name: 'GPS NEO-6M', desc: 'Modul GPS' },
-                  { name: 'MPU6050', desc: 'Accelerometer & Gyro' },
-                  { name: 'Relay Module', desc: 'Kontrol Rem' },
+                  { name: 'GPS BN-220',      desc: 'Modul GPS' },
+                  { name: 'MPU9250',         desc: 'Accelerometer & Gyro' },
+                  { name: 'Relay Module',    desc: 'Kontrol Rem' },
                 ].map((item, j) => (
                   <div key={j} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
                     <span className="text-sm text-gray-300 font-medium">{item.name}</span>
@@ -205,8 +198,8 @@ export default function LandingPage() {
               </p>
               <div className="space-y-2">
                 {[
-                  { name: 'Firebase RTDB', desc: 'Database Real-Time' },
-                  { name: 'Cloud Firestore', desc: 'Log & Riwayat' },
+                  { name: 'Firebase RTDB', desc: 'Sensor & Behavior Log' },
+                  { name: 'Cloud Firestore', desc: 'Data Pengguna' },
                   { name: 'Firebase Auth', desc: 'Autentikasi' },
                   { name: 'WiFi 802.11', desc: 'Komunikasi' },
                 ].map((item, j) => (

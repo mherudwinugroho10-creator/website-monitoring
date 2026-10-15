@@ -5,53 +5,38 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AlertProvider } from './context/AlertContext';
 import { VehicleProvider } from './context/VehicleContext';
 
-// Public Pages
-import LandingPage from './pages/public/LandingPage';
-import Login from './pages/public/LoginPage';
-import Register from './pages/public/RegisterPage';
-import AdminLogin from './pages/public/AdminLoginPage';
-import NotFound from './pages/NotFound';
+// Public
+import LandingPage      from './pages/public/LandingPage';
+import Login            from './pages/public/LoginPage';
+import Register         from './pages/public/RegisterPage';
+import AdminLogin       from './pages/public/AdminLoginPage';
+import NotFound         from './pages/NotFound';
 
-// User Pages
-import Dashboard from './pages/user/Dashboard';
-import LiveMonitoring from './pages/user/LiveMonitoring';
-import BehaviorLog from './pages/user/BehaviorLog';
-import Profile from './pages/user/Profile';
-import DriverMode from './pages/user/DriverMode';
+// User
+import Dashboard        from './pages/user/Dashboard';
+import LiveMonitoring   from './pages/user/LiveMonitoring';
+import BehaviorLog      from './pages/user/BehaviorLog';
+import Profile          from './pages/user/Profile';
 
-// Admin Pages
-import AdminDashboard from './pages/admin/AdminDashboard';
-import ManageDrivers from './pages/admin/ManageDrivers';
-import Settings from './pages/admin/Settings';
-import AdminProfile from './pages/admin/AdminProfile';
+// Admin
+import AdminDashboard   from './pages/admin/AdminDashboard';
+import ManageDrivers    from './pages/admin/ManageDrivers';
+import Settings         from './pages/admin/Settings';
+import AdminProfile     from './pages/admin/AdminProfile';
 import DriverPerformance from './pages/admin/DriverPerformance';
 
-// Layouts
-import UserLayout from './components/layout/UserLayout';
-import AdminLayout from './components/layout/AdminLayout';
+// Layout
+import UserLayout   from './components/layout/UserLayout';
+import AdminLayout  from './components/layout/AdminLayout';
 import LoadingScreen from './components/common/LoadingScreen';
 
 function RequireAuth({ children, requiredRole }) {
   const auth = useAuth();
-
-  if (auth.loading) {
-    return <LoadingScreen message="Memverifikasi akun..." />;
-  }
-
-  if (!auth.currentUser) {
-    return <Navigate to="/login" replace />;
-  }
-
-  const userRole = (auth.userData && auth.userData.role) ? auth.userData.role : 'user';
-
-  if (requiredRole === 'admin' && userRole !== 'admin') {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  if (requiredRole === 'user' && userRole === 'admin') {
-    return <Navigate to="/admin" replace />;
-  }
-
+  if (auth.loading) return <LoadingScreen message="Memverifikasi akun..." />;
+  if (!auth.currentUser) return <Navigate to="/login" replace />;
+  const userRole = auth.userData?.role || 'user';
+  if (requiredRole === 'admin' && userRole !== 'admin') return <Navigate to="/dashboard" replace />;
+  if (requiredRole === 'user'  && userRole === 'admin') return <Navigate to="/admin"     replace />;
   return children;
 }
 
@@ -59,26 +44,24 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public */}
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/"            element={<LandingPage />} />
+      <Route path="/login"       element={<Login />} />
+      <Route path="/register"    element={<Register />} />
       <Route path="/admin/login" element={<AdminLogin />} />
 
-      {/* User */}
-      <Route path="/dashboard" element={<RequireAuth requiredRole="user"><UserLayout><Dashboard /></UserLayout></RequireAuth>} />
-      <Route path="/monitoring" element={<RequireAuth requiredRole="user"><UserLayout><LiveMonitoring /></UserLayout></RequireAuth>} />
+      {/* User — sesuai BAB 3 */}
+      <Route path="/dashboard"    element={<RequireAuth requiredRole="user"><UserLayout><Dashboard /></UserLayout></RequireAuth>} />
+      <Route path="/monitoring"   element={<RequireAuth requiredRole="user"><UserLayout><LiveMonitoring /></UserLayout></RequireAuth>} />
       <Route path="/behavior-log" element={<RequireAuth requiredRole="user"><UserLayout><BehaviorLog /></UserLayout></RequireAuth>} />
-      <Route path="/profile" element={<RequireAuth requiredRole="user"><UserLayout><Profile /></UserLayout></RequireAuth>} />
-      <Route path="/driver-mode" element={<RequireAuth requiredRole="user"><DriverMode /></RequireAuth>} />
+      <Route path="/profile"      element={<RequireAuth requiredRole="user"><UserLayout><Profile /></UserLayout></RequireAuth>} />
 
-      {/* Admin */}
-      <Route path="/admin" element={<RequireAuth requiredRole="admin"><AdminLayout><AdminDashboard /></AdminLayout></RequireAuth>} />
-      <Route path="/admin/drivers" element={<RequireAuth requiredRole="admin"><AdminLayout><ManageDrivers /></AdminLayout></RequireAuth>} />
-      <Route path="/admin/settings" element={<RequireAuth requiredRole="admin"><AdminLayout><Settings /></AdminLayout></RequireAuth>} />
-      <Route path="/admin/profile" element={<RequireAuth requiredRole="admin"><AdminLayout><AdminProfile /></AdminLayout></RequireAuth>} />
+      {/* Admin — sesuai BAB 3 */}
+      <Route path="/admin"                    element={<RequireAuth requiredRole="admin"><AdminLayout><AdminDashboard /></AdminLayout></RequireAuth>} />
+      <Route path="/admin/drivers"            element={<RequireAuth requiredRole="admin"><AdminLayout><ManageDrivers /></AdminLayout></RequireAuth>} />
       <Route path="/admin/driver-performance" element={<RequireAuth requiredRole="admin"><AdminLayout><DriverPerformance /></AdminLayout></RequireAuth>} />
+      <Route path="/admin/settings"           element={<RequireAuth requiredRole="admin"><AdminLayout><Settings /></AdminLayout></RequireAuth>} />
+      <Route path="/admin/profile"            element={<RequireAuth requiredRole="admin"><AdminLayout><AdminProfile /></AdminLayout></RequireAuth>} />
 
-      {/* 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

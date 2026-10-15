@@ -8,12 +8,13 @@ import { Gauge, Mountain, Save, Settings as SettingsIcon } from 'lucide-react';
 export default function Settings() {
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState('');
-  const [speedLimit, setSpeedLimit] = useState('60');
+  const [speedLimit1, setSpeedLimit1] = useState('80');
+  const [speedLimit2, setSpeedLimit2] = useState('40');
   const [tiltThreshold, setTiltThreshold] = useState('15');
+  const [tiltSpeedSwitch, setTiltSpeedSwitch] = useState('1.72');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Load daftar kendaraan dari Firestore users
   useEffect(() => {
     async function loadVehicles() {
       try {
@@ -49,18 +50,21 @@ export default function Settings() {
     loadVehicles();
   }, []);
 
-  // Load settings dari Firebase RTDB saat vehicle berubah
   useEffect(() => {
     if (!selectedVehicle) return;
     const settingsRef = ref(rtdb, `settings/${selectedVehicle}`);
     const unsub = onValue(settingsRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        setSpeedLimit(String(data.speedLimit || 60));
+        setSpeedLimit1(String(data.speedLimit1 || 80));
+        setSpeedLimit2(String(data.speedLimit2 || 40));
         setTiltThreshold(String(data.tiltThreshold || 15));
+        setTiltSpeedSwitch(String(data.tiltSpeedSwitch || 1.72));
       } else {
-        setSpeedLimit('60');
+        setSpeedLimit1('80');
+        setSpeedLimit2('40');
         setTiltThreshold('15');
+        setTiltSpeedSwitch('1.72');
       }
     });
     return () => unsub();
@@ -71,8 +75,10 @@ export default function Settings() {
     try {
       const settingsRef = ref(rtdb, `settings/${selectedVehicle}`);
       await set(settingsRef, {
-        speedLimit: parseInt(speedLimit) || 60,
+        speedLimit1: parseInt(speedLimit1) || 80,
+        speedLimit2: parseInt(speedLimit2) || 40,
         tiltThreshold: parseInt(tiltThreshold) || 15,
+        tiltSpeedSwitch: parseFloat(tiltSpeedSwitch) || 1.72,
       });
       toast.success(`Pengaturan ${selectedVehicle} berhasil disimpan ke Firebase!`);
     } catch (error) {
@@ -123,14 +129,24 @@ export default function Settings() {
           </div>
           <div>
             <h2 className="text-base font-semibold text-white">Batas Kecepatan</h2>
-            <p className="text-xs text-gray-500">Jika melebihi batas → Forced Brake aktif (relay ON, alarm ON).</p>
+            <p className="text-xs text-gray-500">
+              Dua tingkat sesuai kemiringan. Titik pindah diatur di bagian "Titik Pindah Kemiringan" di bawah.
+            </p>
           </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Kecepatan Maksimum (km/h)</label>
-          <input type="number" value={speedLimit} onChange={(e) => setSpeedLimit(e.target.value)}
-            className="w-full px-4 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50 transition-all"
-            min="20" max="120" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Batas Normal (&lt; titik pindah)</label>
+            <input type="number" value={speedLimit1} onChange={(e) => setSpeedLimit1(e.target.value)}
+              className="w-full px-4 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50 transition-all"
+              min="20" max="120" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Batas Saat Kemiringan (≥ titik pindah)</label>
+            <input type="number" value={speedLimit2} onChange={(e) => setSpeedLimit2(e.target.value)}
+              className="w-full px-4 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50 transition-all"
+              min="20" max="120" />
+          </div>
         </div>
       </div>
 
@@ -153,12 +169,32 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Titik Pindah Kemiringan (menentukan speedLimit1 vs speedLimit2) */}
+      <div className="bg-dark-secondary rounded-2xl border border-white/5 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+            <Mountain className="w-5 h-5 text-purple-400" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-white">Titik Pindah Kemiringan</h2>
+            <p className="text-xs text-gray-500">
+              Kemiringan di atas nilai ini membuat alat pindah dari Batas Normal ke Batas Saat Kemiringan.
+            </p>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Ambang Pindah (derajat)</label>
+          <input type="number" step="0.01" value={tiltSpeedSwitch} onChange={(e) => setTiltSpeedSwitch(e.target.value)}
+            className="w-full px-4 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50 transition-all"
+            min="0" max="45" />
+        </div>
+      </div>
+
       {/* Info */}
       <div className="bg-dark-secondary rounded-2xl border border-white/5 p-5">
         <p className="text-xs text-gray-500 leading-relaxed">
           Pengaturan ini tersimpan di Firebase Realtime Database pada path <code className="text-gold">settings/{selectedVehicle}</code>.
-          Website user dan alat ESP32 membaca setting dari path yang sama secara real-time.
-          Saat disimpan, perubahan langsung berlaku di semua halaman monitoring dan alat.
+          Website memantau perubahan secara real-time; alat ESP32 mengecek ulang tiap ±10 detik.
         </p>
       </div>
 

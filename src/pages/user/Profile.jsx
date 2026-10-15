@@ -6,6 +6,7 @@ import { User, Mail, Shield, Calendar, Save, Camera, Key, Bell, Truck } from 'lu
 export default function Profile() {
   var auth = useAuth();
   var userData = auth.userData;
+  var updateUserProfile = auth.updateUserProfile;
 
   var [name, setName] = useState(userData?.name || '');
   var [phone, setPhone] = useState(userData?.phone || '');
@@ -14,9 +15,12 @@ export default function Profile() {
   async function handleSave(e) {
     e.preventDefault();
     setLoading(true);
-    // Simulate save
-    await new Promise(function (resolve) { setTimeout(resolve, 1000); });
-    toast.success('Profil berhasil diperbarui!');
+    var result = await updateUserProfile({ name: name, phone: phone });
+    if (result.success) {
+      toast.success('Profil berhasil diperbarui!');
+    } else {
+      toast.error(result.error || 'Gagal menyimpan perubahan.');
+    }
     setLoading(false);
   }
 
