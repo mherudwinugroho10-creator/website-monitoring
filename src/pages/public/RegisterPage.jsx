@@ -38,6 +38,7 @@ export default function RegisterPage() {
         toast.error(result.error);
       }
     } catch (error) {
+      console.error('Error registrasi:', error);
       toast.error('Terjadi kesalahan saat registrasi.');
     }
     setLoading(false);

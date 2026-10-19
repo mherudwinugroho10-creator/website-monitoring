@@ -32,6 +32,7 @@ export default function LoginPage() {
         toast.error(result.error);
       }
     } catch (error) {
+      console.error('Error login:', error);
       toast.error('Terjadi kesalahan saat login.');
     }
     setLoading(false);

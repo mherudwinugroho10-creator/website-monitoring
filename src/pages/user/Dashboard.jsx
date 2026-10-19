@@ -9,7 +9,7 @@ import { useVehicle } from '../../context/VehicleContext';
 export default function Dashboard() {
   const navigate = useNavigate();
   const { userData } = useAuth();
-  const { liveData, isConnected, events, settings } = useVehicle();
+  const { liveData, isConnected, events } = useVehicle();
 
   const hour = new Date().getHours();
   const greeting =

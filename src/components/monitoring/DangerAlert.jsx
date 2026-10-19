@@ -25,7 +25,9 @@ function playAlertSound(severity) {
       g.gain.linearRampToValueAtTime(0, now + 0.3);
       o.start(now); o.stop(now + 0.3);
     }
-  } catch (_) {}
+  } catch {
+    // AudioContext tidak tersedia atau diblokir browser: peringatan tetap tampil tanpa suara.
+  }
 }
 
 // isConnected: status koneksi ESP dari VehicleContext

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import {
-  Truck, Shield, Activity, Bell, BarChart3,
+  Truck, Shield, Activity, Bell,
   ArrowRight, Gauge, AlertTriangle, User,
   Radio, Database, Monitor
 } from 'lucide-react';

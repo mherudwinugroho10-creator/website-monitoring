@@ -1,4 +1,4 @@
-import { Shield, AlertTriangle, CheckCircle, Zap } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Zap } from 'lucide-react';
 
 export default function BrakeStatus({ exhaustActive = false, forcedBrake = false, mode = 'normal' }) {
   // Status berdasarkan flowchart:

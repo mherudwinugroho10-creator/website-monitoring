@@ -2,7 +2,6 @@ import { Mountain, AlertTriangle } from 'lucide-react';
 
 export default function TiltIndicator({ tilt = 0, maxTilt = 15 }) {
   const isDanger = Math.abs(tilt) > maxTilt;
-  const percentage = Math.min(Math.abs(tilt) / 45 * 100, 100); // 45° = max visual
   const rotation = Math.max(-45, Math.min(45, tilt)); // clamp visual rotation
 
   const statusColor = isDanger ? 'text-red-400' : Math.abs(tilt) > maxTilt * 0.7 ? 'text-yellow-400' : 'text-green-400';

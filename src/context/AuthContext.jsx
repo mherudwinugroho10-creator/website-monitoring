@@ -114,6 +114,7 @@ export function AuthProvider({ children }) {
       setUserData(null);
       return { success: true };
     } catch (error) {
+      console.error('Error logout:', error);
       return { success: false, error: 'Logout gagal.' };
     }
   }

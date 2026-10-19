@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { User, Mail, Shield, Calendar, Save, Camera, Key, Bell, Truck } from 'lucide-react';
+import { User, Mail, Shield, Calendar, Save, Key, Bell, Truck } from 'lucide-react';
 
 export default function Profile() {
   var auth = useAuth();

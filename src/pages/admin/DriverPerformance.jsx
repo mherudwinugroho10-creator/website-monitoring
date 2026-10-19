@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   Users, AlertTriangle, Search, Download,
-  ChevronUp, ChevronDown, Gauge, Mountain, Shield, Eye,
-  History, Clock, CheckCircle, XCircle
+  ChevronUp, ChevronDown, Shield, Eye,
+  History, CheckCircle
 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { ref, onValue, query, orderByChild } from 'firebase/database';
@@ -473,4 +473,4 @@ export default function DriverPerformance() {
       />
     </div>
   );
-}   
+}

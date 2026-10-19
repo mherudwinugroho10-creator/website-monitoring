@@ -41,6 +41,7 @@ export default function AdminLoginPage() {
         toast.error(result.error);
       }
     } catch (error) {
+      console.error('Error login admin:', error);
       toast.error('Terjadi kesalahan saat login.');
     }
     setLoading(false);

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import {
   ref, onValue, query, orderByChild, limitToLast, equalTo, get,
   push, set, update,
@@ -64,7 +64,7 @@ export function VehicleProvider({ children }) {
 
   // Cek dulu apakah sudah ada sesi aktif (dibuat tab lain baru-baru ini)
   // sebelum membuat sesi baru — mencegah duplikasi sesi antar-tab.
-  async function ensureActiveSession() {
+  const ensureActiveSession = useCallback(async () => {
     try {
       const existingQuery = query(
         ref(rtdb, `vehicles/${vehicleId}/sessions`),
@@ -107,7 +107,7 @@ export function VehicleProvider({ children }) {
     } catch (err) {
       console.error('[VehicleContext] Gagal memeriksa/membuat sesi:', err);
     }
-  }
+  }, [vehicleId]);
 
   useEffect(() => {
     if (!vehicleId) return;
@@ -222,7 +222,8 @@ export function VehicleProvider({ children }) {
 
           if (sessionKeyRef.current) {
             newEvents.forEach((evt) => {
-              const { id, ...evtData } = evt;
+              const evtData = { ...evt };
+              delete evtData.id;
               const sessionEventRef = push(
                 ref(rtdb, `vehicles/${vehicleId}/sessions/${sessionKeyRef.current}/events`)
               );
@@ -276,7 +277,7 @@ export function VehicleProvider({ children }) {
       unsubSessions();
       if (connTimerRef.current) clearTimeout(connTimerRef.current);
     };
-  }, [vehicleId]);
+  }, [vehicleId, ensureActiveSession]);
 
   return (
     <VehicleContext.Provider value={{
