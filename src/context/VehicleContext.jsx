@@ -1,10 +1,19 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import {
-  ref, onValue, query, orderByChild, limitToLast, equalTo, get,
-  push, set, update,
-} from 'firebase/database';
+import { createContext, useContext, useReducer, useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { ref, onValue, query, orderByChild, limitToLast } from 'firebase/database';
 import { rtdb } from '../services/firebase';
 import { useAuth } from './AuthContext';
+import { useAlertContext } from './AlertContext';
+import { cleanVehicleId } from '../utils/accountLogic';
+import {
+  CONNECTION_TIMEOUT_MS, FUTURE_TOLERANCE_MS, NOTIFY_WINDOW_MS,
+  getTerrain, normalizeLimits, getActiveLimit, isOverspeed,
+  normalizeLive, normalizeEvent, compareEventsDesc, normalizeSession, deriveSessions,
+  describeEvent,
+} from '../utils/vehicleLogic';
+
+// VehicleContext hanya MEMBACA data kendaraan dari Realtime Database.
+// Penulisan data kendaraan (live, events, sessions, behaviorLog) dilakukan alat,
+// dan penulisan settings dilakukan admin dari halaman Pengaturan.
 
 const VehicleContext = createContext(null);
 
@@ -14,284 +23,253 @@ export function useVehicle() {
   return ctx;
 }
 
-// Interval penulisan permanen ke Behavior Log — sesuai arahan dosen pembimbing.
-const BEHAVIOR_LOG_INTERVAL_MS = 60 * 1000;
+const EVENTS_LIMIT = 200;    // event terbaru yang dimuat
+const SESSIONS_LIMIT = 30;   // sesi terbaru yang dimuat
+const HISTORY_MAX = 120;     // titik grafik kecepatan (5 detik per titik = 10 menit)
 
-// Batas waktu tanpa data 'live' sebelum ESP dianggap terputus.
-const CONNECTION_TIMEOUT_MS = 15 * 1000;
+function formatClock(ms) {
+  return new Date(ms).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
 
-// Jika ditemukan sesi lain berstatus 'aktif' (meta.endTime === 0) yang mulai
-// dalam jendela waktu ini, sesi itu DIADOPSI (bukan bikin sesi baru) — mencegah
-// duplikasi sesi kalau driver membuka lebih dari 1 tab browser bersamaan.
-// Sesi 'aktif' yang JAUH LEBIH TUA (misal sesi zombie lama yang endTime-nya
-// tidak pernah ke-set karena tab ditutup mendadak) TIDAK diadopsi.
-// CATATAN JUJUR: ini mengurangi risiko drastis, TAPI BUKAN jaminan atomik
-// 100% — kalau 2 tab dibuka dalam window sangat sempit (order milidetik),
-// keduanya masih bisa membuat sesi terpisah. Solusi 100% butuh transaksi
-// Firebase yang jauh lebih kompleks, sengaja tidak dipakai di sini.
-const ADOPTABLE_SESSION_MAX_AGE_MS = CONNECTION_TIMEOUT_MS * 2;
+function describeDbError(err) {
+  const code = String((err && (err.code || err.message)) || '').toLowerCase();
+  if (code.includes('permission')) return 'Akun ini tidak memiliki izin untuk membaca data kendaraan.';
+  return 'Gagal membaca data kendaraan. Periksa koneksi internet.';
+}
 
-function formatSessionLabel(date) {
-  return `Sesi ${date.toLocaleString('id-ID', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })}`;
+// ── State data satu kendaraan ────────────────────────────────
+// Setiap aksi membawa vehicleId; aksi dari kendaraan lama (callback yang terlambat) diabaikan.
+function emptyState(vehicleId) {
+  return {
+    vehicleId,
+    rawLive: null,
+    rawSettings: null,
+    events: [],
+    rawSessions: [],
+    loaded: { live: false, settings: false, events: false, sessions: false },
+    dataError: null,
+    isConnected: false,
+    speedHistory: [],
+  };
+}
+
+function reducer(state, action) {
+  if (action.type === 'reset') {
+    return state.vehicleId === action.vehicleId ? state : emptyState(action.vehicleId);
+  }
+  if (action.vehicleId !== state.vehicleId) return state;
+  switch (action.type) {
+    case 'live':
+      return { ...state, rawLive: action.value, loaded: { ...state.loaded, live: true } };
+    case 'settings':
+      return { ...state, rawSettings: action.value, loaded: { ...state.loaded, settings: true } };
+    case 'events':
+      return { ...state, events: action.value, loaded: { ...state.loaded, events: true } };
+    case 'sessions':
+      return { ...state, rawSessions: action.value, loaded: { ...state.loaded, sessions: true } };
+    case 'error':
+      return { ...state, dataError: action.message };
+    case 'connected':
+      return state.isConnected === action.value ? state : { ...state, isConnected: action.value };
+    case 'historyPush':
+      return { ...state, speedHistory: [...state.speedHistory, action.point].slice(-HISTORY_MAX) };
+    case 'historyClear':
+      return state.speedHistory.length ? { ...state, speedHistory: [] } : state;
+    default:
+      return state;
+  }
 }
 
 export function VehicleProvider({ children }) {
   const { userData } = useAuth();
-  const vehicleId = userData?.vehicleId || 'TRUCK_001';
+  const { addNotification } = useAlertContext();
 
-  const [liveData,     setLiveData]     = useState(null);
-  const [events,       setEvents]       = useState([]);
-  const [sessions,     setSessions]     = useState([]);
-  const [settings,     setSettings]     = useState({
-    speedLimit1: 80, speedLimit2: 40, tiltThreshold: 15, tiltSpeedSwitch: 1.72,
-  });
-  const [isConnected,  setIsConnected]  = useState(false);
-  const [lastUpdate,   setLastUpdate]   = useState(null);
-  const [speedHistory, setSpeedHistory] = useState([]);
+  // Hanya pengemudi yang membaca satu kendaraan: kendaraan miliknya sendiri (tanpa nilai bawaan).
+  // Admin dan pengemudi yang belum ditetapkan kendaraannya tidak berlangganan data apa pun.
+  const vehicleId = userData && userData.role === 'user' ? cleanVehicleId(userData.vehicleId) : null;
 
-  const lastEventIdRef       = useRef('');
-  const eventsInitializedRef = useRef(false);
-  const connTimerRef         = useRef(null);
+  const [state, dispatch] = useReducer(reducer, vehicleId, emptyState);
+  const [serverOffset, setServerOffset] = useState(0);
 
-  const sessionKeyRef             = useRef(null);
-  const sessionStartRef           = useRef(null);
-  const lastBehaviorWriteRef      = useRef(0);
-  const eventsSinceLastLogRef     = useRef(0);
-  const sessionCheckInProgressRef = useRef(false);
+  const offsetRef = useRef(0);
+  const lastPushedRef = useRef(null);
+  const seenEventsRef = useRef(null); // null sampai snapshot event pertama; sesudahnya Set ID yang sudah terlihat
+  const notifyRef = useRef(null);
 
-  // Cek dulu apakah sudah ada sesi aktif (dibuat tab lain baru-baru ini)
-  // sebelum membuat sesi baru — mencegah duplikasi sesi antar-tab.
-  const ensureActiveSession = useCallback(async () => {
-    try {
-      const existingQuery = query(
-        ref(rtdb, `vehicles/${vehicleId}/sessions`),
-        orderByChild('meta/endTime'),
-        equalTo(0)
-      );
-      const snap = await get(existingQuery);
+  useEffect(() => { notifyRef.current = addNotification || null; }, [addNotification]);
 
-      let adopted = false;
-      if (snap.exists()) {
-        snap.forEach((child) => {
-          const meta = child.val().meta || {};
-          const age = Date.now() - (meta.startTime || 0);
-          if (age >= 0 && age <= ADOPTABLE_SESSION_MAX_AGE_MS) {
-            sessionKeyRef.current          = child.key;
-            sessionStartRef.current        = meta.startTime || Date.now();
-            lastBehaviorWriteRef.current    = 0;
-            eventsSinceLastLogRef.current   = 0;
-            adopted = true;
-            return true; // hentikan iterasi forEach
-          }
-        });
-      }
-
-      if (!adopted) {
-        const newSessionRef = push(ref(rtdb, `vehicles/${vehicleId}/sessions`));
-        sessionKeyRef.current         = newSessionRef.key;
-        sessionStartRef.current       = Date.now();
-        lastBehaviorWriteRef.current  = 0;
-        eventsSinceLastLogRef.current = 0;
-
-        await set(newSessionRef, {
-          meta: {
-            startTime: sessionStartRef.current,
-            endTime:   0,
-            label:     formatSessionLabel(new Date(sessionStartRef.current)),
-          },
-        });
-      }
-    } catch (err) {
-      console.error('[VehicleContext] Gagal memeriksa/membuat sesi:', err);
-    }
+  // Kendaraan berganti -> mulai dari kosong. Dijalankan sebelum langganan dipasang.
+  useEffect(() => {
+    dispatch({ type: 'reset', vehicleId });
   }, [vehicleId]);
 
+  const serverNow = useCallback(() => Date.now() + offsetRef.current, []);
+
+  // ── Langganan RTDB (semua hanya baca) ─────────────────────
   useEffect(() => {
-    if (!vehicleId) return;
+    if (!vehicleId) return undefined;
+    seenEventsRef.current = null;
+    lastPushedRef.current = null;
 
-    // ── PATH 1: vehicles/{vehicleId}/live ──────────────────
-    const unsubLive = onValue(
-      ref(rtdb, `vehicles/${vehicleId}/live`),
-      (snap) => {
-        if (snap.exists()) {
-          const data = snap.val();
+    const onError = (err) => {
+      console.error('[VehicleContext] Gagal membaca data kendaraan:', err);
+      dispatch({ type: 'error', vehicleId, message: describeDbError(err) });
+    };
 
-          if (typeof data.timestamp === 'number') {
-            const dataAge = Date.now() - data.timestamp;
-            if (dataAge > CONNECTION_TIMEOUT_MS) {
-              return;
-            }
-          }
+    // Selisih jam perangkat pengguna terhadap server Firebase.
+    const unsubOffset = onValue(ref(rtdb, '.info/serverTimeOffset'), (snap) => {
+      const v = snap.val();
+      const offset = typeof v === 'number' && Number.isFinite(v) ? v : 0;
+      offsetRef.current = offset;
+      setServerOffset(offset);
+    });
 
-          setLiveData(data);
-          setIsConnected(true);
-          setLastUpdate(Date.now());
+    const unsubLive = onValue(ref(rtdb, `vehicles/${vehicleId}/live`), (snap) => {
+      dispatch({ type: 'live', vehicleId, value: snap.exists() ? normalizeLive(snap.val()) : null });
+    }, onError);
 
-          setSpeedHistory((prev) => {
-            const label = new Date().toLocaleTimeString('id-ID', {
-              hour: '2-digit', minute: '2-digit', second: '2-digit',
-            });
-            return [...prev, { time: label, speed: data.gps?.speed || 0 }].slice(-120);
-          });
+    const unsubSettings = onValue(ref(rtdb, `settings/${vehicleId}`), (snap) => {
+      dispatch({ type: 'settings', vehicleId, value: snap.exists() ? snap.val() : null });
+    }, onError);
 
-          // ── Riwayat Sesi (Behavior Log) ──────────────────
-          if (!sessionKeyRef.current && !sessionCheckInProgressRef.current) {
-            sessionCheckInProgressRef.current = true;
-            ensureActiveSession().finally(() => {
-              sessionCheckInProgressRef.current = false;
-            });
-          }
-
-          // Hanya tulis behaviorLog kalau sessionKey sudah pasti ada (bisa
-          // saja masih null sesaat karena ensureActiveSession() di atas
-          // berjalan async — akan tertulis di tick berikutnya, tidak hilang).
-          const now = Date.now();
-          if (sessionKeyRef.current && now - lastBehaviorWriteRef.current >= BEHAVIOR_LOG_INTERVAL_MS) {
-            lastBehaviorWriteRef.current = now;
-            const behaviorRef = push(
-              ref(rtdb, `vehicles/${vehicleId}/sessions/${sessionKeyRef.current}/behaviorLog`)
-            );
-            set(behaviorRef, {
-              timestamp:   now,
-              elapsedSec:  Math.floor((now - sessionStartRef.current) / 1000),
-              speed:       data.gps?.speed    || 0,
-              tilt:        data.tilt          || 0,
-              forcedBrake: data.brake?.forced || false,
-              eventCount:  eventsSinceLastLogRef.current,
-            });
-            eventsSinceLastLogRef.current = 0;
-          }
-
-          if (connTimerRef.current) clearTimeout(connTimerRef.current);
-          connTimerRef.current = setTimeout(() => {
-            setIsConnected(false);
-            setLiveData(null);
-            setSpeedHistory([]);
-
-            if (sessionKeyRef.current) {
-              update(ref(rtdb, `vehicles/${vehicleId}/sessions/${sessionKeyRef.current}/meta`), {
-                endTime: Date.now(),
-              });
-              sessionKeyRef.current         = null;
-              sessionStartRef.current       = null;
-              lastBehaviorWriteRef.current  = 0;
-              eventsSinceLastLogRef.current = 0;
-            }
-          }, CONNECTION_TIMEOUT_MS);
-        }
-      }
-    );
-
-    // ── PATH 2: settings/{vehicleId} ──────────────────────
-    const unsubSettings = onValue(
-      ref(rtdb, `settings/${vehicleId}`),
-      (snap) => {
-        if (snap.exists()) {
-          setSettings((prev) => ({ ...prev, ...snap.val() }));
-        }
-      }
-    );
-
-    // ── PATH 3: vehicles/{vehicleId}/events — 200 terbaru ─
     const eventsQuery = query(
       ref(rtdb, `vehicles/${vehicleId}/events`),
       orderByChild('timestamp'),
-      limitToLast(200)
+      limitToLast(EVENTS_LIMIT)
     );
     const unsubEvents = onValue(eventsQuery, (snap) => {
       const list = [];
-      if (snap.exists()) {
-        snap.forEach((child) => {
-          list.push({ id: child.key, ...child.val() });
+      snap.forEach((child) => {
+        const e = normalizeEvent(child.key, child.val());
+        if (e) list.push(e);
+      });
+      list.sort(compareEventsDesc);
+      dispatch({ type: 'events', vehicleId, value: list });
+
+      // Lonceng notifikasi: hanya event yang masuk SETELAH halaman dibuka dan masih baru.
+      if (seenEventsRef.current === null) {
+        seenEventsRef.current = new Set(list.map((e) => e.id));
+        return;
+      }
+      const seen = seenEventsRef.current;
+      const fresh = list.filter((e) => !seen.has(e.id));
+      fresh.forEach((e) => seen.add(e.id));
+      if (!notifyRef.current) return;
+      const now = Date.now() + offsetRef.current;
+      fresh
+        .filter((e) => now - e.timestamp <= NOTIFY_WINDOW_MS)
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .forEach((e) => {
+          const d = describeEvent(e);
+          notifyRef.current({ type: e.type, severity: e.severity, message: d.title, details: d.details });
         });
-      }
+    }, onError);
 
-      if (!eventsInitializedRef.current) {
-        eventsInitializedRef.current = true;
-        lastEventIdRef.current = list.length > 0 ? list[list.length - 1].id : '';
-      } else {
-        const lastIdx = list.findIndex((e) => e.id === lastEventIdRef.current);
-        const newEvents = lastIdx === -1 ? list : list.slice(lastIdx + 1);
-
-        if (newEvents.length > 0) {
-          lastEventIdRef.current = newEvents[newEvents.length - 1].id;
-          eventsSinceLastLogRef.current += newEvents.length;
-
-          if (sessionKeyRef.current) {
-            newEvents.forEach((evt) => {
-              const evtData = { ...evt };
-              delete evtData.id;
-              const sessionEventRef = push(
-                ref(rtdb, `vehicles/${vehicleId}/sessions/${sessionKeyRef.current}/events`)
-              );
-              set(sessionEventRef, evtData);
-            });
-          }
-        }
-      }
-
-      setEvents([...list].reverse());
-    });
-
-    // ── PATH 4: vehicles/{vehicleId}/sessions ─────────────
-    const unsubSessions = onValue(
+    const sessionsQuery = query(
       ref(rtdb, `vehicles/${vehicleId}/sessions`),
-      (snap) => {
-        if (snap.exists()) {
-          const list = [];
-          snap.forEach((child) => {
-            const s = child.val();
-            const sessionEvents = s.events
-              ? Object.entries(s.events)
-                  .map(([k, v]) => ({ id: k, ...v }))
-                  .sort((a, b) => b.timestamp - a.timestamp)
-              : [];
-            const behaviorLog = s.behaviorLog
-              ? Object.entries(s.behaviorLog)
-                  .map(([k, v]) => ({ id: k, ...v }))
-                  .sort((a, b) => a.timestamp - b.timestamp)
-              : [];
-
-            list.push({
-              key:         child.key,
-              meta:        s.meta || {},
-              events:      sessionEvents,
-              behaviorLog: behaviorLog,
-            });
-          });
-          list.sort((a, b) => (b.meta.startTime || 0) - (a.meta.startTime || 0));
-          setSessions(list);
-        } else {
-          setSessions([]);
-        }
-      }
+      orderByChild('meta/startTime'),
+      limitToLast(SESSIONS_LIMIT)
     );
+    const unsubSessions = onValue(sessionsQuery, (snap) => {
+      const list = [];
+      snap.forEach((child) => {
+        const s = normalizeSession(child.key, child.val());
+        if (s) list.push(s);
+      });
+      dispatch({ type: 'sessions', vehicleId, value: list });
+    }, onError);
 
     return () => {
+      unsubOffset();
       unsubLive();
       unsubSettings();
       unsubEvents();
       unsubSessions();
-      if (connTimerRef.current) clearTimeout(connTimerRef.current);
     };
-  }, [vehicleId, ensureActiveSession]);
+  }, [vehicleId]);
 
-  return (
-    <VehicleContext.Provider value={{
+  // Data milik kendaraan saat ini saja; selama pergantian kendaraan, sisa data lama disembunyikan.
+  const current = state.vehicleId === vehicleId ? state : emptyState(vehicleId);
+  const { rawLive } = current;
+
+  // ── Status koneksi: data live <= 15 detik (jam server) ─────
+  useEffect(() => {
+    if (!vehicleId) return undefined;
+    if (!rawLive || rawLive.timestamp === null) {
+      dispatch({ type: 'connected', vehicleId, value: false });
+      return undefined;
+    }
+    const age = Date.now() + serverOffset - rawLive.timestamp;
+    const remaining = CONNECTION_TIMEOUT_MS - age;
+    if (age < -FUTURE_TOLERANCE_MS || remaining <= 0) {
+      dispatch({ type: 'connected', vehicleId, value: false });
+      return undefined;
+    }
+    dispatch({ type: 'connected', vehicleId, value: true });
+    const timer = setTimeout(() => dispatch({ type: 'connected', vehicleId, value: false }), remaining);
+    return () => clearTimeout(timer);
+  }, [vehicleId, rawLive, serverOffset]);
+
+  // ── Riwayat kecepatan untuk grafik (hanya saat terhubung) ──
+  const connected = current.isConnected;
+  useEffect(() => {
+    if (!vehicleId) return;
+    if (!connected) {
+      lastPushedRef.current = null;
+      dispatch({ type: 'historyClear', vehicleId });
+      return;
+    }
+    if (!rawLive || rawLive.timestamp === null || rawLive.timestamp === lastPushedRef.current) return;
+    lastPushedRef.current = rawLive.timestamp;
+    dispatch({
+      type: 'historyPush',
       vehicleId,
+      point: { ts: rawLive.timestamp, time: formatClock(rawLive.timestamp), speed: rawLive.gps.speed || 0 },
+    });
+  }, [vehicleId, connected, rawLive]);
+
+  // ── Nilai turunan ─────────────────────────────────────────
+  const value = useMemo(() => {
+    const hasVehicle = vehicleId !== null;
+    const isConnected = hasVehicle && current.isConnected;
+    const liveData = isConnected ? current.rawLive : null;
+    const speed = liveData ? liveData.gps.speed : null;
+    const tilt = liveData ? liveData.tilt : null;
+    const terrain = liveData ? getTerrain(tilt) : 'unknown';
+
+    // Tanpa kendaraan tidak ada batas yang berlaku (tidak ada nilai karangan).
+    const limits = hasVehicle ? normalizeLimits(current.rawSettings) : { flat: null, downhill: null, flatIsDefault: true };
+    const activeLimit = hasVehicle ? getActiveLimit(terrain, limits) : null;
+
+    return {
+      vehicleId,
+      hasVehicle,
+
+      // Data live. liveData bernilai null saat alat terputus; lastLive menyimpan data terakhir.
       liveData,
-      events,
-      sessions,
-      settings,
+      lastLive: current.rawLive,
       isConnected,
-      lastUpdate,
-      speedHistory,
-      lastEventIdRef,
-    }}>
-      {children}
-    </VehicleContext.Provider>
-  );
+      lastUpdate: current.rawLive ? current.rawLive.timestamp : null,
+      speed,
+      tilt,
+
+      // Medan & batas kecepatan (dihitung website dari kemiringan dan pengaturan admin).
+      terrain,                      // 'flat' | 'downhill' | 'unknown'
+      limits,                       // { flat, downhill, flatIsDefault }
+      activeLimit,                  // null bila medan menurun tetapi batas menurun belum diatur
+      isOverspeed: isOverspeed(speed, activeLimit),
+      settings: { speedLimit1: limits.flat, speedLimit2: limits.downhill }, // kompatibilitas halaman lama
+
+      events: current.events,       // terbaru dulu; hanya overspeed dan forced_brake
+      sessions: deriveSessions(current.rawSessions, { isConnected }),
+      speedHistory: current.speedHistory,
+
+      serverNow,
+      serverOffset,
+      loaded: !hasVehicle || (current.loaded.live && current.loaded.settings && current.loaded.events && current.loaded.sessions),
+      dataError: current.dataError,
+    };
+  }, [vehicleId, current, serverNow, serverOffset]);
+
+  return <VehicleContext.Provider value={value}>{children}</VehicleContext.Provider>;
 }

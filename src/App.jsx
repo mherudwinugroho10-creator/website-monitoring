@@ -71,8 +71,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <VehicleProvider>
-          <AlertProvider>
+        <AlertProvider>
+          <VehicleProvider>
             <ToastContainer
               position="top-right"
               autoClose={3000}
@@ -91,8 +91,8 @@ export default function App() {
               }}
             />
             <AppRoutes />
-          </AlertProvider>
-        </VehicleProvider>
+          </VehicleProvider>
+        </AlertProvider>
       </AuthProvider>
     </BrowserRouter>
   );

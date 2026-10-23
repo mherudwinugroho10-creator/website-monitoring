@@ -1,15 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Menu, Bell, Trash2, CheckCheck, Gauge, Mountain, Shield, AlertTriangle, Disc } from 'lucide-react';
+import { Menu, Bell, Trash2, CheckCheck, Gauge, Shield, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAlertContext } from '../../context/AlertContext';
 
 function getAlertIcon(type) {
   switch (type) {
     case 'overspeed': return Gauge;
-    case 'steep_slope': return Mountain;
-    case 'auto_brake': return Shield;
-    case 'excessive_roll': return AlertTriangle;
-    case 'harsh_braking': return Disc;
+    case 'forced_brake': return Shield;
     default: return AlertTriangle;
   }
 }
@@ -114,7 +111,7 @@ export default function Navbar({ toggleSidebar }) {
                   <div className="px-4 py-10 text-center">
                     <Bell className="w-8 h-8 text-gray-600 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">Belum ada notifikasi</p>
-                    <p className="text-xs text-gray-600 mt-1">Mulai simulasi di Live Monitoring</p>
+                    <p className="text-xs text-gray-600 mt-1">Peringatan overspeed dan forced brake akan muncul di sini</p>
                   </div>
                 ) : (
                   notifications.map((n) => {
