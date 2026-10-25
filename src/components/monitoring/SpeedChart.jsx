@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -5,87 +6,66 @@ import {
   LinearScale,
   PointElement,
   LineElement,
-  Title,
   Tooltip,
-  Legend,
-  Filler
+  Filler,
 } from 'chart.js';
+import { chartMax, formatNumber } from '../../utils/vehicleLogic';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
 
-export default function SpeedChart({ data, maxSpeed }) {
-  var limit = maxSpeed || 60;
+// Grafik riwayat kecepatan sejak alat terhubung. Setiap titik membawa batas aktif saat itu,
+// sehingga garis batas ikut turun ketika kendaraan memasuki jalan menurun.
+export default function SpeedChart({ data, connected }) {
+  const max = useMemo(() => chartMax(data), [data]);
 
-  var chartData = {
-    labels: data.map(function (d) { return d.time; }),
+  const chartData = useMemo(() => ({
+    labels: data.map((d) => d.time),
     datasets: [
       {
         label: 'Kecepatan',
-        data: data.map(function (d) { return d.speed; }),
+        data: data.map((d) => d.speed),
         borderColor: '#fbbf24',
         backgroundColor: 'rgba(251, 191, 36, 0.1)',
         borderWidth: 2,
         fill: true,
-        tension: 0.4,
+        cubicInterpolationMode: 'monotone',
         pointRadius: 0,
         pointHoverRadius: 4,
         pointHoverBackgroundColor: '#fbbf24',
       },
       {
         label: 'Batas',
-        data: data.map(function () { return limit; }),
-        borderColor: 'rgba(239, 68, 68, 0.5)',
+        data: data.map((d) => d.limit),
+        borderColor: 'rgba(239, 68, 68, 0.6)',
         borderWidth: 2,
         borderDash: [5, 5],
         fill: false,
-        tension: 0,
+        stepped: true,
+        spanGaps: false,
         pointRadius: 0,
       },
     ],
-  };
+  }), [data]);
 
-  var options = {
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
-    animation: {
-      duration: 300,
-      easing: 'easeOutQuart',
-    },
-    interaction: {
-      intersect: false,
-      mode: 'index',
-    },
+    animation: { duration: 300, easing: 'easeOutQuart' },
+    interaction: { intersect: false, mode: 'index' },
     scales: {
       x: {
-        display: true,
-        grid: {
-          color: 'rgba(255, 255, 255, 0.03)',
-        },
-        ticks: {
-          color: 'rgba(255, 255, 255, 0.4)',
-          font: { size: 10 },
-          maxRotation: 0,
-          maxTicksLimit: 6,
-        },
+        grid: { color: 'rgba(255, 255, 255, 0.03)' },
+        ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 10 }, maxRotation: 0, maxTicksLimit: 6 },
       },
       y: {
-        display: true,
         min: 0,
-        max: 120,
-        grid: {
-          color: 'rgba(255, 255, 255, 0.03)',
-        },
-        ticks: {
-          color: 'rgba(255, 255, 255, 0.4)',
-          font: { size: 10 },
-          stepSize: 20,
-        },
+        max,
+        grid: { color: 'rgba(255, 255, 255, 0.03)' },
+        ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 10 }, stepSize: 20 },
       },
     },
     plugins: {
-      legend: {
-        display: false,
-      },
+      legend: { display: false },
       tooltip: {
         backgroundColor: 'rgba(15, 15, 15, 0.9)',
         titleColor: '#fff',
@@ -95,18 +75,19 @@ export default function SpeedChart({ data, maxSpeed }) {
         padding: 10,
         displayColors: false,
         callbacks: {
-          label: function (context) {
-            return context.parsed.y + ' km/h';
+          label: (context) => {
+            if (context.parsed.y === null || context.parsed.y === undefined) return `${context.dataset.label}: belum diatur`;
+            return `${context.dataset.label}: ${formatNumber(context.parsed.y, 2)} km/jam`;
           },
         },
       },
     },
-  };
+  }), [max]);
 
   if (data.length === 0) {
     return (
-      <div className="h-48 flex items-center justify-center text-gray-500 text-sm">
-        Mulai simulasi untuk melihat grafik
+      <div className="h-48 flex items-center justify-center text-gray-500 text-sm text-center" data-testid="chart-empty">
+        {connected ? 'Mengumpulkan data kecepatan…' : 'Menunggu data dari alat untuk menampilkan grafik'}
       </div>
     );
   }

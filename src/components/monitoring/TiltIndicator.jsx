@@ -1,54 +1,65 @@
-import { Mountain, AlertTriangle } from 'lucide-react';
+import { formatNumber, terrainLabel, tiltVisualAngle, TILT_DOWNHILL_THRESHOLD } from '../../utils/vehicleLogic';
 
-export default function TiltIndicator({ tilt = 0, maxTilt = 15 }) {
-  const isDanger = Math.abs(tilt) > maxTilt;
-  const rotation = Math.max(-45, Math.min(45, tilt)); // clamp visual rotation
+// Indikator kemiringan jalan (%): ilustrasi truk di atas jalan, status DATAR atau MENURUN
+// menurut ambang 3%. Status ini informasi, bukan peringatan, jadi tidak memakai warna bahaya.
+export default function TiltIndicator({ tilt, terrain, connected }) {
+  const hasTilt = connected && typeof tilt === 'number';
+  const angle = hasTilt ? tiltVisualAngle(tilt) : 0;
+  const downhill = hasTilt && terrain === 'downhill';
+  const accent = hasTilt ? '#d4af37' : '#4b5563';
+  const status = hasTilt ? terrainLabel(terrain) : '—';
 
-  const statusColor = isDanger ? 'text-red-400' : Math.abs(tilt) > maxTilt * 0.7 ? 'text-yellow-400' : 'text-green-400';
-  const statusText = isDanger ? 'BAHAYA' : Math.abs(tilt) > maxTilt * 0.7 ? 'WASPADA' : 'AMAN';
+  const badgeClass = !hasTilt
+    ? 'bg-white/[0.03] text-gray-500 border-white/10'
+    : downhill
+      ? 'bg-gold/10 text-gold border-gold/30'
+      : 'bg-white/5 text-gray-200 border-white/10';
+
+  const caption = !connected
+    ? 'Menunggu data dari alat'
+    : !hasTilt
+      ? 'Sensor kemiringan belum mengirim data'
+      : `Menurun bila kemiringan ≥ ${TILT_DOWNHILL_THRESHOLD}%`;
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      {/* Visual: Truck tilt representation */}
-      <div className="relative w-48 h-48 flex items-center justify-center">
-        {/* Background circle */}
-        <div className="absolute inset-0 rounded-full border-2 border-white/10" />
+    <div className="flex flex-col items-center gap-3">
+      <svg viewBox="0 0 200 150" className="w-full max-w-[260px]" role="img"
+        aria-label={hasTilt ? `Kemiringan jalan ${formatNumber(tilt, 2)} persen, ${status.toLowerCase()}` : 'Kemiringan jalan tidak ada data'}>
+        <defs>
+          <clipPath id="tilt-ring-clip"><circle cx="100" cy="75" r="68" /></clipPath>
+        </defs>
+        <circle cx="100" cy="75" r="70" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
 
-        {/* Danger zone arc */}
-        <div className="absolute inset-2 rounded-full border-2 border-dashed border-red-500/20" />
+        <g clipPath="url(#tilt-ring-clip)">
+          {/* acuan datar (tetap) */}
+          <line x1="20" y1="112" x2="180" y2="112" stroke="rgba(255,255,255,0.16)" strokeWidth="1.5" strokeDasharray="3 4" />
 
-        {/* Ground line (fixed) */}
-        <div className="absolute w-full h-[2px] bg-white/20 top-1/2" />
+          {/* jalan dan truk (ikut miring) */}
+          <g style={{ transform: `rotate(${angle}deg)`, transformOrigin: '100px 112px', transition: 'transform 0.4s ease-out' }}>
+            <line x1="10" y1="112" x2="190" y2="112" stroke={accent} strokeWidth="2.5" strokeLinecap="round" />
+            <g fill={hasTilt ? 'rgba(212,175,55,0.1)' : 'rgba(255,255,255,0.03)'} stroke={accent} strokeWidth="2" strokeLinejoin="round">
+              <rect x="50" y="62" width="64" height="34" rx="3" />
+              <path d="M114 96 V72 H138 L152 86 V96 Z" />
+              <path d="M120 77 H135 L144 86 H120 Z" />
+              <circle cx="68" cy="104" r="8" fill="#0a0a0f" />
+              <circle cx="92" cy="104" r="8" fill="#0a0a0f" />
+              <circle cx="138" cy="104" r="8" fill="#0a0a0f" />
+            </g>
+          </g>
+        </g>
+      </svg>
 
-        {/* Tilting truck body */}
-        <div
-          className="relative transition-transform duration-300 ease-out"
-          style={{ transform: `rotate(${rotation}deg)` }}
-        >
-          {/* Truck body */}
-          <div className={`w-24 h-14 rounded-lg border-2 flex items-center justify-center transition-colors duration-300 ${
-            isDanger ? 'border-red-500 bg-red-500/10' : 'border-gold bg-gold/10'
-          }`}>
-            <Mountain className={`w-6 h-6 ${isDanger ? 'text-red-400' : 'text-gold'}`} />
-          </div>
-          {/* Wheels */}
-          <div className="flex justify-between px-2 -mt-1">
-            <div className={`w-4 h-4 rounded-full border-2 ${isDanger ? 'border-red-500' : 'border-gray-400'}`} />
-            <div className={`w-4 h-4 rounded-full border-2 ${isDanger ? 'border-red-500' : 'border-gray-400'}`} />
-          </div>
-        </div>
-      </div>
-
-      {/* Info */}
       <div className="text-center space-y-2">
-        <div className="flex items-center justify-center gap-2">
-          <span className={`text-3xl font-bold ${statusColor}`}>{tilt.toFixed(1)}°</span>
+        <div>
+          <span className={`text-3xl font-bold font-mono ${hasTilt ? 'text-white' : 'text-gray-600'}`}>
+            {hasTilt ? formatNumber(tilt, 2) : '—'}
+          </span>
+          <span className="text-sm text-gray-500 ml-1">%</span>
         </div>
-        <div className="flex items-center justify-center gap-2">
-          {isDanger && <AlertTriangle className="w-4 h-4 text-red-400" />}
-          <span className={`text-sm font-medium ${statusColor}`}>{statusText}</span>
-        </div>
-        <p className="text-xs text-gray-500">Batas aman: {maxTilt}°</p>
+        <span data-testid="tilt-status" className={`inline-block px-3 py-1 rounded-lg border text-xs font-semibold tracking-wide ${badgeClass}`}>
+          {status}
+        </span>
+        <p className="text-[11px] text-gray-600">{caption}</p>
       </div>
     </div>
   );

@@ -33,6 +33,16 @@ export function toFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+// Angka untuk tampilan: koma desimal (id-ID), paling banyak maxDecimals digit; tidak valid -> '—'.
+export function formatNumber(value, maxDecimals = 1) {
+  const n = toFiniteNumber(value);
+  if (n === null) return '—';
+  const factor = Math.pow(10, maxDecimals);
+  const rounded = Math.round(n * factor) / factor;
+  const safe = rounded === 0 ? 0 : rounded; // hindari tampilan "-0"
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: maxDecimals }).format(safe);
+}
+
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -167,11 +177,14 @@ export function eventTypeLabel(type) {
   return type === 'overspeed' ? 'Overspeed' : type === 'forced_brake' ? 'Forced Brake' : String(type || '');
 }
 
-// Teks ringkas untuk lonceng notifikasi dan peringatan bahaya. Kemiringan dalam persen.
+// Teks ringkas untuk lonceng notifikasi dan peringatan bahaya (sesuai skripsi):
+// overspeed menampilkan kecepatan; forced brake menampilkan kecepatan dan kemiringan (%).
 export function describeEvent(event) {
   const parts = [];
-  if (event.speed !== null && event.speed !== undefined) parts.push(`Kecepatan ${event.speed} km/jam`);
-  if (event.tilt !== null && event.tilt !== undefined) parts.push(`Kemiringan ${event.tilt}%`);
+  if (event.speed !== null && event.speed !== undefined) parts.push(`Kecepatan ${formatNumber(event.speed, 2)} km/jam`);
+  if (event.type === 'forced_brake' && event.tilt !== null && event.tilt !== undefined) {
+    parts.push(`Kemiringan ${formatNumber(event.tilt, 2)}%`);
+  }
   return {
     title: event.message || eventTypeLabel(event.type),
     details: parts.join(' • '),
@@ -299,4 +312,138 @@ export function sessionDurationMs(session, serverNowMs) {
   else if (session.status === SESSION_STATUS.ACTIVE) end = serverNowMs;
   else end = session.lastActivity;
   return Math.max(0, end - start);
+}
+
+// ── Peringatan bahaya (DangerAlert) ──────────────────────────
+const SEVERITY_RANK = Object.freeze({ warning: 1, danger: 2, critical: 3 });
+export const SEVERITY_LABEL = Object.freeze({ warning: 'PERINGATAN', danger: 'BAHAYA', critical: 'KRITIS' });
+
+export function severityRank(severity) {
+  return SEVERITY_RANK[severity] || 1;
+}
+
+export function normalizeSeverity(severity) {
+  return SEVERITY_RANK[severity] ? severity : 'warning';
+}
+
+// Event yang masih berada dalam 5 detik terakhir menurut jam server.
+export function activeDangerEvents(events, serverNowMs) {
+  return (events || []).filter((e) => isDangerFresh(e, serverNowMs));
+}
+
+// Jeda (ms) sampai event aktif paling awal habis masa tampilnya; null bila tidak ada.
+export function nextDangerExpiryMs(events, serverNowMs) {
+  let next = null;
+  for (const e of activeDangerEvents(events, serverNowMs)) {
+    const remaining = e.timestamp + DANGER_WINDOW_MS - serverNowMs;
+    if (remaining >= 0 && (next === null || remaining + 1 < next)) next = remaining + 1;
+  }
+  return next;
+}
+
+// Menggabungkan event yang sedang aktif menjadi satu peringatan. Overspeed dan forced brake
+// yang masuk bersamaan tampil dalam satu kartu; tiap jenis menampilkan event terbarunya.
+export function buildDangerAlert(activeEvents) {
+  const list = (activeEvents || []).filter((e) => e && EVENT_TYPES.includes(e.type));
+  if (!list.length) return null;
+  const items = [];
+  for (const type of EVENT_TYPES) {
+    const ofType = list.filter((e) => e.type === type).sort(compareEventsDesc);
+    if (!ofType.length) continue;
+    items.push({
+      type,
+      label: eventTypeLabel(type),
+      count: ofType.length,
+      event: ofType[0],
+      details: describeEvent(ofType[0]).details,
+    });
+  }
+  let severity = 'warning';
+  for (const e of list) {
+    if (severityRank(e.severity) > severityRank(severity)) severity = normalizeSeverity(e.severity);
+  }
+  return {
+    ids: list.map((e) => e.id),
+    title: items.map((i) => i.label).join(' dan '),
+    severity,
+    severityLabel: SEVERITY_LABEL[severity],
+    items,
+    newestTimestamp: Math.max(...list.map((e) => e.timestamp)),
+  };
+}
+
+// ── Tampilan Live Monitoring & Dashboard ─────────────────────
+export const DEFAULT_GAUGE_MAX = 120;      // km/jam, skala speedometer standar
+export const TILT_VISUAL_GAIN = 3;         // sudut ilustrasi truk diperbesar agar terlihat
+export const TILT_VISUAL_MAX_DEG = 25;
+
+// 'unknown' (alat terputus) | 'forced' | 'exhaust' | 'normal'
+export function brakeState(live) {
+  if (!live || !live.brake) return 'unknown';
+  if (live.brake.forced === true) return 'forced';
+  if (live.brake.exhaust_active === true) return 'exhaust';
+  return 'normal';
+}
+
+export function terrainLabel(terrain) {
+  return terrain === 'downhill' ? 'MENURUN' : terrain === 'flat' ? 'DATAR' : '—';
+}
+
+// Sudut ilustrasi truk (derajat, searah jarum jam = hidung turun) dari kemiringan jalan (%).
+export function tiltVisualAngle(tilt) {
+  const t = toFiniteNumber(tilt);
+  if (t === null) return 0;
+  const deg = ((Math.atan(t / 100) * 180) / Math.PI) * TILT_VISUAL_GAIN;
+  return Math.max(-TILT_VISUAL_MAX_DEG, Math.min(TILT_VISUAL_MAX_DEG, deg));
+}
+
+// Skala speedometer: 120 km/jam, diperlebar bila batas aktif mendekati ujung skala.
+export function gaugeMax(limit) {
+  const l = toFiniteNumber(limit);
+  const needed = l !== null && l > 0 ? Math.ceil((l * 1.2) / 20) * 20 : 0;
+  return Math.max(DEFAULT_GAUGE_MAX, needed);
+}
+
+// Skala sumbu Y grafik kecepatan: kelipatan 20 di atas nilai tertinggi (minimal 80).
+export function chartMax(points) {
+  let top = 0;
+  for (const p of points || []) {
+    const s = toFiniteNumber(p && p.speed);
+    const l = toFiniteNumber(p && p.limit);
+    if (s !== null && s > top) top = s;
+    if (l !== null && l > top) top = l;
+  }
+  return Math.max(80, Math.ceil((top * 1.1) / 20) * 20);
+}
+
+// ── Hari berjalan & rekap event ──────────────────────────────
+export function startOfDayMs(nowMs) {
+  const d = new Date(nowMs);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+export function nextDayStartMs(nowMs) {
+  const d = new Date(nowMs);
+  d.setHours(24, 0, 0, 0);
+  return d.getTime();
+}
+
+export function countEvents(events) {
+  let overspeed = 0;
+  let forcedBrake = 0;
+  for (const e of events || []) {
+    if (!e) continue;
+    if (e.type === 'overspeed') overspeed += 1;
+    else if (e.type === 'forced_brake') forcedBrake += 1;
+  }
+  return { overspeed, forcedBrake, total: overspeed + forcedBrake };
+}
+
+// Keterangan batas kecepatan yang sedang berlaku (untuk kartu Batas Kecepatan dan speedometer).
+export function describeLimit(terrain, limits, activeLimit) {
+  if (terrain === 'downhill') {
+    return activeLimit === null || activeLimit === undefined ? 'Batas jalan menurun belum diatur' : 'Jalan menurun';
+  }
+  return limits && limits.flatIsDefault ? `Jalan datar (standar ${DEFAULT_FLAT_LIMIT} km/jam)` : 'Jalan datar';
 }

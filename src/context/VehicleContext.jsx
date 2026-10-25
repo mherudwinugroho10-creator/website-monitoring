@@ -43,6 +43,8 @@ function emptyState(vehicleId) {
   return {
     vehicleId,
     rawLive: null,
+    liveReceivedAt: null, // jam server saat snapshot live terakhir diterima listener
+    liveInitial: true,    // snapshot pertama setelah berlangganan (belum dihitung sebagai latensi)
     rawSettings: null,
     events: [],
     rawSessions: [],
@@ -60,7 +62,13 @@ function reducer(state, action) {
   if (action.vehicleId !== state.vehicleId) return state;
   switch (action.type) {
     case 'live':
-      return { ...state, rawLive: action.value, loaded: { ...state.loaded, live: true } };
+      return {
+        ...state,
+        rawLive: action.value,
+        liveReceivedAt: action.receivedAt,
+        liveInitial: action.initial,
+        loaded: { ...state.loaded, live: true },
+      };
     case 'settings':
       return { ...state, rawSettings: action.value, loaded: { ...state.loaded, settings: true } };
     case 'events':
@@ -124,8 +132,17 @@ export function VehicleProvider({ children }) {
       setServerOffset(offset);
     });
 
+    let firstLive = true;
     const unsubLive = onValue(ref(rtdb, `vehicles/${vehicleId}/live`), (snap) => {
-      dispatch({ type: 'live', vehicleId, value: snap.exists() ? normalizeLive(snap.val()) : null });
+      const initial = firstLive;
+      firstLive = false;
+      dispatch({
+        type: 'live',
+        vehicleId,
+        value: snap.exists() ? normalizeLive(snap.val()) : null,
+        receivedAt: Date.now() + offsetRef.current,
+        initial,
+      });
     }, onError);
 
     const unsubSettings = onValue(ref(rtdb, `settings/${vehicleId}`), (snap) => {
@@ -190,7 +207,7 @@ export function VehicleProvider({ children }) {
 
   // Data milik kendaraan saat ini saja; selama pergantian kendaraan, sisa data lama disembunyikan.
   const current = state.vehicleId === vehicleId ? state : emptyState(vehicleId);
-  const { rawLive } = current;
+  const { rawLive, rawSettings } = current;
 
   // ── Status koneksi: data live <= 15 detik (jam server) ─────
   useEffect(() => {
@@ -211,6 +228,8 @@ export function VehicleProvider({ children }) {
   }, [vehicleId, rawLive, serverOffset]);
 
   // ── Riwayat kecepatan untuk grafik (hanya saat terhubung) ──
+  // Tiap titik menyimpan batas aktif saat data diterima, sehingga garis batas pada grafik
+  // ikut berubah ketika kendaraan berpindah antara jalan datar dan menurun.
   const connected = current.isConnected;
   useEffect(() => {
     if (!vehicleId) return;
@@ -221,12 +240,13 @@ export function VehicleProvider({ children }) {
     }
     if (!rawLive || rawLive.timestamp === null || rawLive.timestamp === lastPushedRef.current) return;
     lastPushedRef.current = rawLive.timestamp;
+    const limit = getActiveLimit(getTerrain(rawLive.tilt), normalizeLimits(rawSettings));
     dispatch({
       type: 'historyPush',
       vehicleId,
-      point: { ts: rawLive.timestamp, time: formatClock(rawLive.timestamp), speed: rawLive.gps.speed || 0 },
+      point: { ts: rawLive.timestamp, time: formatClock(rawLive.timestamp), speed: rawLive.gps.speed || 0, limit },
     });
-  }, [vehicleId, connected, rawLive]);
+  }, [vehicleId, connected, rawLive, rawSettings]);
 
   // ── Nilai turunan ─────────────────────────────────────────
   const value = useMemo(() => {
@@ -238,8 +258,16 @@ export function VehicleProvider({ children }) {
     const terrain = liveData ? getTerrain(tilt) : 'unknown';
 
     // Tanpa kendaraan tidak ada batas yang berlaku (tidak ada nilai karangan).
-    const limits = hasVehicle ? normalizeLimits(current.rawSettings) : { flat: null, downhill: null, flatIsDefault: true };
+    const limits = hasVehicle ? normalizeLimits(rawSettings) : { flat: null, downhill: null, flatIsDefault: true };
     const activeLimit = hasVehicle ? getActiveLimit(terrain, limits) : null;
+
+    // Latensi = jam server saat listener menerima data dikurangi timestamp server saat alat menulis.
+    // Hanya untuk pembaruan sesudah halaman terbuka dan masih wajar (< batas koneksi).
+    let latencyMs = null;
+    if (!current.liveInitial && current.liveReceivedAt !== null && current.rawLive && current.rawLive.timestamp !== null) {
+      const diff = current.liveReceivedAt - current.rawLive.timestamp;
+      if (diff < CONNECTION_TIMEOUT_MS) latencyMs = Math.max(0, diff);
+    }
 
     return {
       vehicleId,
@@ -250,6 +278,8 @@ export function VehicleProvider({ children }) {
       lastLive: current.rawLive,
       isConnected,
       lastUpdate: current.rawLive ? current.rawLive.timestamp : null,
+      lastReceivedAt: current.liveReceivedAt,
+      latencyMs,
       speed,
       tilt,
 
@@ -269,7 +299,7 @@ export function VehicleProvider({ children }) {
       loaded: !hasVehicle || (current.loaded.live && current.loaded.settings && current.loaded.events && current.loaded.sessions),
       dataError: current.dataError,
     };
-  }, [vehicleId, current, serverNow, serverOffset]);
+  }, [vehicleId, current, rawSettings, serverNow, serverOffset]);
 
   return <VehicleContext.Provider value={value}>{children}</VehicleContext.Provider>;
 }
