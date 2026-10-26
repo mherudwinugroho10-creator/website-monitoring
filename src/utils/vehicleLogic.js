@@ -16,6 +16,8 @@ export const DANGER_WINDOW_MS = 5 * 1000;       // peringatan bahaya aktif bila 
 export const NOTIFY_WINDOW_MS = 60 * 1000;      // event baru <= 60 detik masuk lonceng notifikasi
 export const FUTURE_TOLERANCE_MS = 10 * 1000;   // toleransi selisih jam (timestamp "di masa depan")
 export const EVENT_TYPES = Object.freeze(['overspeed', 'forced_brake']);
+export const EVENTS_LIMIT = 200;   // jumlah event terbaru yang dimuat website (VehicleContext, Behavior Log)
+export const SESSIONS_LIMIT = 30;   // jumlah sesi terbaru yang dimuat website
 
 export const SESSION_STATUS = Object.freeze({
   ACTIVE: 'active',     // Berlangsung
@@ -219,6 +221,7 @@ function normalizeLogEntry(id, raw, startTime) {
     speed: speed !== null && speed >= 0 ? speed : null,
     tilt: toFiniteNumber(raw.tilt),
     forcedBrake: raw.forcedBrake === true,
+    exhaustActive: raw.exhaustActive === true, // opsional: exhaust brake aktif saat rekaman dibuat
     eventCount: eventCount !== null && eventCount >= 0 ? Math.floor(eventCount) : 0,
     limit: toFiniteNumber(raw.limit),
   };

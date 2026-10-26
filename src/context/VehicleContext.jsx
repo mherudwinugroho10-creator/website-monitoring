@@ -5,7 +5,7 @@ import { useAuth } from './AuthContext';
 import { useAlertContext } from './AlertContext';
 import { cleanVehicleId } from '../utils/accountLogic';
 import {
-  CONNECTION_TIMEOUT_MS, FUTURE_TOLERANCE_MS, NOTIFY_WINDOW_MS,
+  CONNECTION_TIMEOUT_MS, FUTURE_TOLERANCE_MS, NOTIFY_WINDOW_MS, EVENTS_LIMIT, SESSIONS_LIMIT,
   getTerrain, normalizeLimits, getActiveLimit, isOverspeed,
   normalizeLive, normalizeEvent, compareEventsDesc, normalizeSession, deriveSessions,
   describeEvent,
@@ -23,8 +23,6 @@ export function useVehicle() {
   return ctx;
 }
 
-const EVENTS_LIMIT = 200;    // event terbaru yang dimuat
-const SESSIONS_LIMIT = 30;   // sesi terbaru yang dimuat
 const HISTORY_MAX = 120;     // titik grafik kecepatan (5 detik per titik = 10 menit)
 
 function formatClock(ms) {
