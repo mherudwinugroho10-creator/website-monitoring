@@ -1,190 +1,163 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { Gauge, Shield, Wifi, WifiOff, Loader2, AlertCircle, Truck, Settings } from 'lucide-react';
+import { useAlertContext } from '../../context/AlertContext';
+import { useServerClock, useDayStart, useRerenderAt, useDirectory, useFleetLive, useFleetTodayEvents } from '../../hooks/useAdminData';
 import {
-  Users, AlertTriangle, Shield, Settings, Award,
-  ArrowRight, Gauge, Mountain
-} from 'lucide-react';
-import { collection, getDocs } from 'firebase/firestore';
-import { ref, onValue, query, orderByChild, limitToLast } from 'firebase/database';
-import { db, rtdb } from '../../services/firebase';
+  buildFleet, fleetVehicleIds, vehicleLabel, buildFleetAlerts, nextFleetAlertExpiryMs, collectNewEvents,
+  fleetTodayCounts, buildFleetRows, summarizeFleet, nextConnectionCheckMs,
+} from '../../utils/adminLogic';
+import { describeEvent } from '../../utils/vehicleLogic';
+import FleetAlertPanel from '../../components/admin/FleetAlertPanel';
+import FleetTable from '../../components/admin/FleetTable';
+
+function formatDay(ms) {
+  return new Date(ms).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function earliest(a, b) {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.min(a, b);
+}
+
+function ErrorBanner({ children, testId }) {
+  return (
+    <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl p-4" role="alert" data-testid={testId}>
+      <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+      <div className="text-sm text-red-300 min-w-0">{children}</div>
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
-  const [totalDrivers, setTotalDrivers] = useState(0);
-  const [allEvents, setAllEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { addNotification } = useAlertContext();
+  const directory = useDirectory();
+  const fleet = useMemo(() => buildFleet(directory.users, directory.invites), [directory.users, directory.invites]);
+  const ids = useMemo(() => fleetVehicleIds(fleet), [fleet]);
 
+  const { serverNow, offset } = useServerClock();
+  const dayStart = useDayStart(offset);
+  const live = useFleetLive(ids);
+  const today = useFleetTodayEvents(ids, dayStart);
+
+  // ── Notifikasi lonceng untuk event baru di kendaraan mana pun ─
+  // Pembacaan pertama tiap kendaraan hanya menjadi dasar; hanya event yang masuk sesudahnya (dan masih baru) dibunyikan.
+  const seenRef = useRef(new Map());
+  const notifyRef = useRef(addNotification);
+  useEffect(() => { notifyRef.current = addNotification; }, [addNotification]);
   useEffect(() => {
-    async function loadData() {
-      try {
-        // Load users dari Firestore
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const vehicleIds = [];
-        let driverCount = 0;
-        usersSnap.forEach(doc => {
-          const data = doc.data();
-          if (data.role === 'user' || !data.role) {
-            driverCount++;
-            if (data.vehicleId && !vehicleIds.includes(data.vehicleId)) {
-              vehicleIds.push(data.vehicleId);
-            }
-          }
-        });
-        setTotalDrivers(driverCount);
-
-        // Fallback
-        if (vehicleIds.length === 0) vehicleIds.push('TRUCK_001');
-
-        // Load events dari semua kendaraan
-        const allEvts = [];
-        for (const vid of vehicleIds) {
-          const eventsRef = query(
-            ref(rtdb, `vehicles/${vid}/events`),
-            orderByChild('timestamp'),
-            limitToLast(50)
-          );
-          await new Promise(resolve => {
-            onValue(eventsRef, (snapshot) => {
-              if (snapshot.exists()) {
-                snapshot.forEach(child => {
-                  allEvts.push({ id: child.key, vehicleId: vid, ...child.val() });
-                });
-              }
-              resolve();
-            }, { onlyOnce: true });
-          });
-        }
-        allEvts.sort((a, b) => b.timestamp - a.timestamp);
-        setAllEvents(allEvts);
-      } catch (error) {
-        console.error('Error loading admin data:', error);
-      }
-      setLoading(false);
+    const { fresh, seen } = collectNewEvents(seenRef.current, today.eventsById, today.loadedById, serverNow());
+    seenRef.current = seen;
+    if (!notifyRef.current) return;
+    for (const { vehicleId, event } of fresh) {
+      const vehicle = fleet.find((v) => v.vehicleId === vehicleId);
+      const d = describeEvent(event);
+      notifyRef.current({
+        type: event.type,
+        severity: event.severity,
+        message: `${vehicle ? vehicleLabel(vehicle) : vehicleId}: ${d.title}`,
+        details: d.details,
+      });
     }
-    loadData();
-  }, []);
+  }, [today.eventsById, today.loadedById, fleet, serverNow]);
 
-  // Stats hari ini
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEvents = allEvents.filter(e => e.timestamp >= todayStart.getTime());
-  const todayOverspeed = todayEvents.filter(e => e.type === 'overspeed').length;
-  const todayForcedBrake = todayEvents.filter(e => e.type === 'forced_brake').length;
-  const todaySteepSlope = todayEvents.filter(e => e.type === 'steep_slope').length;
+  // ── Turunan tampilan (dihitung ulang tiap render dengan jam server) ─
+  const nowMs = serverNow();
+  const liveErrorIds = new Set(live.liveErrors.map((e) => e.vehicleId));
+  const rows = buildFleetRows(fleet, live.liveById, live.settingsById, nowMs).map((r) => (
+    liveErrorIds.has(r.vehicleId) ? { ...r, status: 'error', connected: false } : r
+  ));
+  const summary = summarizeFleet(rows);
+  const alerts = buildFleetAlerts(today.eventsById, fleet, nowMs);
+  const counts = fleetTodayCounts(today.eventsById, today.loadedById, ids);
 
-  const recentEvents = allEvents.slice(0, 5);
+  useRerenderAt(earliest(nextFleetAlertExpiryMs(today.eventsById, nowMs), nextConnectionCheckMs(live.liveById, nowMs)));
 
-  function formatTimestamp(ts) {
-    const date = typeof ts === 'number' ? new Date(ts) : new Date(ts);
-    if (isNaN(date.getTime())) return '-';
-    return date.toLocaleString('id-ID', {
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-    });
-  }
+  const directoryLoading = !directory.loaded;
+  const countsReady = directory.loaded && counts.ready;
+  const cards = [
+    { key: 'overspeed', title: 'Overspeed', icon: Gauge, color: 'text-orange-400', bg: 'bg-orange-500/10', value: countsReady ? counts.overspeed : null },
+    { key: 'forced_brake', title: 'Forced Brake', icon: Shield, color: 'text-red-400', bg: 'bg-red-500/10', value: countsReady ? counts.forcedBrake : null },
+  ];
 
-  const typeConfig = {
-    overspeed: { icon: Gauge, color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'Overspeed' },
-    forced_brake: { icon: Shield, color: 'text-red-400', bg: 'bg-red-500/10', label: 'Forced Brake' },
-    steep_slope: { icon: Mountain, color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Turunan Ekstrem' },
+  const labelOf = (vehicleId) => {
+    const v = fleet.find((x) => x.vehicleId === vehicleId);
+    return v ? vehicleLabel(v) : vehicleId;
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const todayErrorIds = [...new Set(today.errors.map((e) => e.vehicleId))];
+  const settingsErrorIds = [...new Set(live.settingsErrors.map((e) => e.vehicleId))];
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-gray-400 mt-1">Pantau seluruh kendaraan secara realtime.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2" data-testid="fleet-summary">
+          <span data-testid="chip-connected" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-green-500/10 border-green-500/20 text-green-400 text-sm font-medium">
+            <Wifi className="w-4 h-4" /> {summary.connected} terhubung
+          </span>
+          <span data-testid="chip-disconnected" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-red-500/10 border-red-500/20 text-red-400 text-sm font-medium">
+            <WifiOff className="w-4 h-4" /> {summary.disconnected} terputus
+          </span>
+        </div>
+      </div>
+
+      {directory.error && <ErrorBanner testId="directory-error">{directory.error}</ErrorBanner>}
+      {directory.invitesError && !directory.error && <ErrorBanner testId="invites-error">{directory.invitesError}</ErrorBanner>}
+
       <div>
-        <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-        <p className="text-gray-400 mt-1">Ringkasan sistem SAFEDRIVE.</p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-5">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3">
-            <Users className="w-5 h-5 text-blue-400" />
-          </div>
-          <div className="text-2xl font-bold text-white">{totalDrivers}</div>
-          <div className="text-xs text-gray-500 mt-1">Total Pengemudi</div>
+        <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 mb-3">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Kejadian Hari Ini</h2>
+          <p className="text-xs text-gray-600" data-testid="today-date">{formatDay(dayStart)} · seluruh kendaraan</p>
         </div>
-        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-5">
-          <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center mb-3">
-            <Gauge className="w-5 h-5 text-orange-400" />
+        {todayErrorIds.length > 0 && (
+          <div className="mb-3">
+            <ErrorBanner testId="today-error">Gagal membaca kejadian hari ini untuk: {todayErrorIds.map(labelOf).join(', ')}. Angka di bawah belum lengkap.</ErrorBanner>
           </div>
-          <div className="text-2xl font-bold text-orange-400">{todayOverspeed}</div>
-          <div className="text-xs text-gray-500 mt-1">Overspeed Hari Ini</div>
-        </div>
-        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-5">
-          <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center mb-3">
-            <Shield className="w-5 h-5 text-red-400" />
-          </div>
-          <div className="text-2xl font-bold text-red-400">{todayForcedBrake}</div>
-          <div className="text-xs text-gray-500 mt-1">Forced Brake Hari Ini</div>
-        </div>
-        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-5">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3">
-            <Mountain className="w-5 h-5 text-blue-400" />
-          </div>
-          <div className="text-2xl font-bold text-blue-400">{todaySteepSlope}</div>
-          <div className="text-xs text-gray-500 mt-1">Turunan Ekstrem Hari Ini</div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Events */}
-        <div className="lg:col-span-2 bg-dark-secondary rounded-2xl border border-white/5 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-white">Event Terbaru (Semua Kendaraan)</h2>
-            <Link to="/admin/driver-performance" className="text-xs text-gold hover:text-gold-dark flex items-center gap-1">
-              Lihat Rekap <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-          {recentEvents.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 text-sm">
-              Belum ada event tercatat — jalankan simulasi di halaman user atau hubungkan alat IoT
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {recentEvents.map(evt => {
-                const cfg = typeConfig[evt.type] || { icon: AlertTriangle, color: 'text-gray-400', bg: 'bg-gray-500/10', label: evt.type };
-                const Icon = cfg.icon;
-                return (
-                  <div key={evt.id} className="flex items-center gap-3 p-3 bg-white/[0.02] rounded-xl border border-white/5">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
-                      <Icon className={`w-4 h-4 ${cfg.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-300 truncate">{evt.message}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">{formatTimestamp(evt.timestamp)} • {evt.vehicleId}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Quick Access */}
-        <div className="space-y-4">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Aksi Cepat</h2>
-          {[
-            { to: '/admin/drivers', icon: Users, label: 'Kelola Pengemudi', color: 'text-blue-400', bg: 'bg-blue-500/10' },
-            { to: '/admin/driver-performance', icon: Award, label: 'Performa Driver', color: 'text-green-400', bg: 'bg-green-500/10' },
-            { to: '/admin/settings', icon: Settings, label: 'Pengaturan', color: 'text-purple-400', bg: 'bg-purple-500/10' },
-          ].map(item => (
-            <Link key={item.to} to={item.to}
-              className="flex items-center gap-4 p-4 bg-dark-secondary rounded-2xl border border-white/5 hover:border-gold/20 transition-all group">
-              <div className={`w-11 h-11 rounded-xl ${item.bg} flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0`}>
-                <item.icon className={`w-5 h-5 ${item.color}`} />
+        )}
+        <div className="grid grid-cols-2 gap-4">
+          {cards.map((c) => (
+            <div key={c.key} data-testid={`today-${c.key}`} className="bg-dark-secondary rounded-2xl border border-white/5 p-5">
+              <div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center mb-3`}>
+                <c.icon className={`w-5 h-5 ${c.color}`} />
               </div>
-              <span className="text-sm font-medium text-white group-hover:text-gold transition-colors">{item.label}</span>
-            </Link>
+              <div className={`text-3xl font-bold font-mono ${c.value === null ? 'text-gray-600' : c.color}`} data-testid={`today-${c.key}-value`}>
+                {c.value === null ? '—' : c.value}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">{c.title}</div>
+            </div>
           ))}
         </div>
+      </div>
+
+      <FleetAlertPanel alerts={alerts} nowMs={nowMs} vehicleCount={ids.length} ready={countsReady} />
+
+      <div className="bg-dark-secondary rounded-2xl border border-white/5 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-5 border-b border-white/5">
+          <div>
+            <h2 className="text-base font-semibold text-white flex items-start gap-2">
+              <Truck className="w-4 h-4 text-gold flex-shrink-0 mt-1" /> <span>Data Monitoring Realtime – Seluruh Kendaraan</span>
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">Diperbarui otomatis. Kendaraan dianggap terputus bila tidak mengirim data lebih dari 15 detik.</p>
+          </div>
+          <Link to="/admin/settings" className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gold transition-colors">
+            <Settings className="w-3.5 h-3.5" /> Atur batas kecepatan
+          </Link>
+        </div>
+        {settingsErrorIds.length > 0 && (
+          <div className="p-4 border-b border-white/5">
+            <ErrorBanner testId="settings-error">Batas kecepatan gagal dibaca untuk: {settingsErrorIds.map(labelOf).join(', ')}. Penanda overspeed pada tabel memakai batas standar 80 km/jam untuk jalan datar.</ErrorBanner>
+          </div>
+        )}
+        <FleetTable rows={rows} loading={directoryLoading} />
+        {!directoryLoading && rows.length > 0 && live.liveLoaded && Object.keys(live.liveLoaded).length < ids.length && (
+          <div className="px-5 py-3 border-t border-white/5 flex items-center gap-2 text-xs text-gray-500">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menunggu data dari kendaraan…
+          </div>
+        )}
       </div>
     </div>
   );

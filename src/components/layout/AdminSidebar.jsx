@@ -10,7 +10,7 @@ export default function AdminSidebar({ isOpen, setIsOpen }) {
  const menuItems = [
      { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
      { icon: Users, label: 'Kelola Pengemudi', path: '/admin/drivers' },
-     { icon: Award, label: 'Performa Driver', path: '/admin/driver-performance' },
+     { icon: Award, label: 'Performa Pengemudi', path: '/admin/driver-performance' },
      { icon: Settings, label: 'Pengaturan', path: '/admin/settings' },
   ];
 

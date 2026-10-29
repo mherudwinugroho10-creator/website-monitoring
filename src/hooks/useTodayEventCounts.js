@@ -2,27 +2,16 @@ import { useEffect, useState } from 'react';
 import { ref, onValue, query, orderByChild, startAt } from 'firebase/database';
 import { rtdb } from '../services/firebase';
 import { cleanVehicleId } from '../utils/accountLogic';
-import { normalizeEvent, countEvents, startOfDayMs, nextDayStartMs } from '../utils/vehicleLogic';
+import { normalizeEvent, countEvents } from '../utils/vehicleLogic';
+import { useDayStart } from './useAdminData';
 
 // Rekap event hari berjalan (overspeed dan forced brake) satu kendaraan, dihitung dari
 // timestamp event terhadap awal hari menurut jam server. Hanya membaca RTDB.
 // Pembacaan dibatasi dengan startAt(awal hari), jadi hasilnya tidak terpotong batas jumlah event
 // pada VehicleContext, dan otomatis berganti saat lewat tengah malam.
 export function useTodayEventCounts(vehicleId, serverOffset) {
-  const [dayStart, setDayStart] = useState(() => startOfDayMs(Date.now() + serverOffset));
+  const dayStart = useDayStart(serverOffset);
   const [result, setResult] = useState(null);
-
-  // Jam server berubah (selisih jam terbaca) -> hitung ulang awal hari.
-  useEffect(() => {
-    setDayStart(startOfDayMs(Date.now() + serverOffset));
-  }, [serverOffset]);
-
-  // Ganti hari saat tengah malam.
-  useEffect(() => {
-    const now = Date.now() + serverOffset;
-    const timer = setTimeout(() => setDayStart(startOfDayMs(Date.now() + serverOffset)), nextDayStartMs(now) - now + 500);
-    return () => clearTimeout(timer);
-  }, [dayStart, serverOffset]);
 
   useEffect(() => {
     const id = cleanVehicleId(vehicleId);

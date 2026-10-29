@@ -42,6 +42,9 @@ export default function SessionCard({ group, defaultOpen = false, serverNow, onE
                 </span>
               )}
             </span>
+            {group.owner && (
+              <span className="block text-xs text-gray-400 mt-0.5 truncate" data-testid="session-owner">{group.owner}</span>
+            )}
             {session ? (
               <span className="flex items-center gap-3 mt-1 flex-wrap">
                 <span className="text-xs text-gray-500 flex items-center gap-1">

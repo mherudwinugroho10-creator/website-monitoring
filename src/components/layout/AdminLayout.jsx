@@ -1,9 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
 import Navbar from './Navbar';
 
+const isDesktop = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+
 export default function AdminLayout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Desktop: sidebar terbuka. Ponsel/tablet: tertutup agar halaman langsung terlihat.
+  const [sidebarOpen, setSidebarOpen] = useState(isDesktop);
+  const { pathname } = useLocation();
+
+  // Di layar kecil sidebar menutup otomatis setelah berpindah halaman.
+  useEffect(() => {
+    if (!isDesktop()) setSidebarOpen(false);
+  }, [pathname]);
 
   return (
     <div className="min-h-screen bg-dark-primary">

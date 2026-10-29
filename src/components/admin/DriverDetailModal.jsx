@@ -1,227 +1,174 @@
-import { X, User, Gauge, Mountain, Shield, AlertTriangle, Download, MapPin } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
+import { Download, Gauge, Shield, Truck, Info, AlertCircle } from 'lucide-react';
+import Modal from '../common/Modal';
+import { formatNumber } from '../../utils/vehicleLogic';
+import { formatDateTime } from '../../utils/behaviorLogic';
+import {
+  PERFORMANCE_EVENTS_LIMIT, buildEventDetailRows, detailExportInfo, detailFileName,
+} from '../../utils/adminLogic';
+import { writeDetailWorkbook } from '../../utils/exportAdmin';
 
-export default function DriverDetailModal({ driver, isOpen, onClose }) {
-  if (!isOpen || !driver) return null;
+const STEP = 50;
+const TYPE_STYLE = {
+  overspeed: { cls: 'bg-orange-500/10 text-orange-400', icon: Gauge },
+  forced_brake: { cls: 'bg-red-500/10 text-red-400', icon: Shield },
+};
 
-  const typeConfig = {
-    overspeed: { icon: Gauge, color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'Overspeed' },
-    forced_brake: { icon: Shield, color: 'text-red-400', bg: 'bg-red-500/10', label: 'Forced Brake' },
-    steep_slope: { icon: Mountain, color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Turunan Ekstrem' },
-  };
+function TypeBadge({ type, label }) {
+  const st = TYPE_STYLE[type] || TYPE_STYLE.overspeed;
+  const Icon = st.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap ${st.cls}`}>
+      <Icon className="w-3 h-3" />{label}
+    </span>
+  );
+}
 
-  // Sort events terbaru dulu
-  const sortedEvents = [...(driver.events || [])]
-    .sort((a, b) => b.timestamp - a.timestamp);
+function Num({ value }) {
+  return value === null || value === undefined ? <span className="text-gray-600">—</span> : <span className="font-mono">{formatNumber(value, 2)}</span>;
+}
 
-  function formatTimestamp(ts) {
-    const date = typeof ts === 'number' ? new Date(ts) : new Date(ts);
-    if (isNaN(date.getTime())) return '-';
-    return date.toLocaleString('id-ID', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
-    });
-  }
+// Rincian pelanggaran satu pengemudi sesuai filter rekap yang aktif.
+export default function DriverDetailModal({ row, filter, adminName, truncated, onClose }) {
+  const [shown, setShown] = useState(STEP);
+  const detail = useMemo(() => buildEventDetailRows(row.events), [row.events]);
+  const visible = detail.slice(0, shown);
 
-  function getTypeLabel(type) {
-    return typeConfig[type]?.label || type;
-  }
-
-  // === EXPORT EXCEL 1 DRIVER ===
-  function handleExportDriver() {
+  function handleExport() {
+    if (!row.ready) {
+      toast.error('Data event kendaraan ini belum tersedia, jadi tidak bisa diekspor.');
+      return;
+    }
+    if (detail.length === 0) {
+      toast.error('Tidak ada data untuk diekspor.');
+      return;
+    }
     try {
-      if (sortedEvents.length === 0) {
-        toast.error('Belum ada data event untuk pengemudi ini');
-        return;
-      }
-
-      const worksheetData = [
-        // Info header
-        ['REKAP PELANGGARAN PENGEMUDI'],
-        ['Nama', driver.name],
-        ['Kendaraan', driver.vehicleName],
-        ['Plat Nomor', driver.vehiclePlate],
-        ['Total Overspeed', driver.overspeed],
-        ['Total Forced Brake', driver.forced_brake],
-        ['Total Turunan Ekstrem', driver.steep_slope],
-        ['Total Pelanggaran', driver.total],
-        [],
-        // Tabel detail events
-        ['No', 'Tanggal & Waktu', 'Tipe', 'Keterangan', 'Kecepatan (km/h)', 'Kemiringan (°)', 'Latitude', 'Longitude'],
-        ...sortedEvents.map((evt, i) => [
-          i + 1,
-          formatTimestamp(evt.timestamp),
-          getTypeLabel(evt.type),
-          evt.message || '-',
-          evt.speed ?? '-',
-          evt.tilt ?? '-',
-          evt.lat ? parseFloat(evt.lat.toFixed(6)) : '-',
-          evt.lng ? parseFloat(evt.lng.toFixed(6)) : '-',
-        ])
-      ];
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet(worksheetData);
-
-      // Column widths
-      ws['!cols'] = [
-        { wch: 5 },   // No
-        { wch: 22 },  // Tanggal
-        { wch: 18 },  // Tipe
-        { wch: 50 },  // Keterangan
-        { wch: 16 },  // Kecepatan
-        { wch: 14 },  // Kemiringan
-        { wch: 14 },  // Lat
-        { wch: 14 },  // Lng
-      ];
-
-      // Merge title
-      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
-
-      XLSX.utils.book_append_sheet(wb, ws, `Detail ${driver.name}`);
-
-      const date = new Date().toISOString().split('T')[0];
-      const safeName = driver.name.replace(/[^a-zA-Z0-9]/g, '_');
-      XLSX.writeFile(wb, `detail_pelanggaran_${safeName}_${date}.xlsx`);
-      toast.success(`Data ${driver.name} berhasil diexport!`);
-    } catch (error) {
-      toast.error('Gagal export: ' + error.message);
+      const exportedAt = Date.now();
+      writeDetailWorkbook({
+        detailRows: detail,
+        fileName: detailFileName(row, exportedAt),
+        info: detailExportInfo({
+          driver: row, filter, rowCount: detail.length, exportedAt, adminName,
+          summary: { overspeed: row.overspeed, forcedBrake: row.forcedBrake, total: row.total },
+        }),
+      });
+      toast.success(`${detail.length} baris berhasil diekspor ke Excel.`);
+    } catch (err) {
+      console.error('[DriverDetailModal] Gagal ekspor:', err);
+      toast.error('Gagal ekspor: ' + err.message);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-dark-primary rounded-2xl border border-white/10 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}>
-
-        {/* Header */}
-        <div className="p-6 border-b border-white/10 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gold/10 flex items-center justify-center">
-              <User className="w-6 h-6 text-gold" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white">{driver.name}</h2>
-              <p className="text-sm text-gray-400">{driver.vehicleName} • {driver.vehiclePlate}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={handleExportDriver}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gold hover:bg-gold-dark text-dark-primary font-semibold rounded-xl text-sm transition-all">
+    <Modal open onClose={onClose} size="xl" testId="driver-detail-modal"
+      title={`Rincian Pelanggaran — ${row.name || row.email}`}
+      subtitle={[row.vehicleName, row.vehiclePlate, row.vehicleId].filter(Boolean).join(' · ') || undefined}
+      footer={(
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-xs text-gray-600">Sesuai filter tipe dan tanggal pada halaman Performa.</p>
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} data-autofocus
+              className="px-5 py-2.5 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">Tutup</button>
+            <button type="button" onClick={handleExport} data-testid="detail-export"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gold hover:bg-gold-dark text-dark-primary font-semibold rounded-xl transition-all">
               <Download className="w-4 h-4" /> Export Excel
             </button>
-            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5 transition-colors">
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
           </div>
         </div>
-
-        {/* Stats */}
-        <div className="p-6 border-b border-white/10 flex-shrink-0">
-          <div className="grid grid-cols-4 gap-4">
-            <div className="text-center p-3 bg-orange-500/5 rounded-xl border border-orange-500/10">
-              <div className="text-xl font-bold text-orange-400">{driver.overspeed}x</div>
-              <div className="text-xs text-gray-500 mt-1">Overspeed</div>
+      )}>
+      <div className="p-6 space-y-5">
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { key: 'total', label: 'Total', value: row.total, color: 'text-white' },
+            { key: 'overspeed', label: 'Overspeed', value: row.overspeed, color: 'text-orange-400' },
+            { key: 'forced', label: 'Forced Brake', value: row.forcedBrake, color: 'text-red-400' },
+          ].map((c) => (
+            <div key={c.key} className="bg-dark-secondary rounded-xl border border-white/5 p-4" data-testid={`detail-${c.key}`}>
+              <div className={`text-2xl font-bold font-mono ${c.value === null ? 'text-gray-600' : c.color}`}>{c.value === null ? '—' : c.value}</div>
+              <div className="text-xs text-gray-500 mt-1">{c.label}</div>
             </div>
-            <div className="text-center p-3 bg-red-500/5 rounded-xl border border-red-500/10">
-              <div className="text-xl font-bold text-red-400">{driver.forced_brake}x</div>
-              <div className="text-xs text-gray-500 mt-1">Forced Brake</div>
-            </div>
-            <div className="text-center p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
-              <div className="text-xl font-bold text-blue-400">{driver.steep_slope}x</div>
-              <div className="text-xs text-gray-500 mt-1">Turunan Ekstrem</div>
-            </div>
-            <div className="text-center p-3 bg-white/[0.03] rounded-xl border border-white/5">
-              <div className="text-xl font-bold text-white">{driver.total}</div>
-              <div className="text-xs text-gray-500 mt-1">Total</div>
-            </div>
-          </div>
+          ))}
         </div>
 
-        {/* Events Table */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between sticky top-0 bg-dark-primary z-10">
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Detail Kejadian ({sortedEvents.length})</h3>
+        {truncated && (
+          <div className="flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3.5" data-testid="detail-truncated">
+            <Info className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-yellow-200/90">
+              Hanya {PERFORMANCE_EVENTS_LIMIT} event terbaru kendaraan ini yang dimuat. Event yang lebih lama tidak ikut terhitung.
+            </p>
           </div>
+        )}
 
-          {sortedEvents.length === 0 ? (
-            <div className="text-center py-16">
-              <AlertTriangle className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">Belum ada event tercatat untuk pengemudi ini</p>
+        {!row.hasVehicle ? (
+          <div className="py-10 text-center" data-testid="detail-no-vehicle">
+            <Truck className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+            <p className="text-sm text-gray-400">Pengemudi ini belum memiliki kendaraan.</p>
+          </div>
+        ) : !row.ready ? (
+          <div className="py-10 text-center" data-testid="detail-unavailable">
+            <AlertCircle className="w-8 h-8 text-yellow-500/80 mx-auto mb-2" />
+            <p className="text-sm text-gray-300">Data event kendaraan ini belum termuat atau gagal dibaca.</p>
+            <p className="text-xs text-gray-600 mt-1">Tutup rincian ini lalu buka lagi setelah halaman memuat ulang datanya.</p>
+          </div>
+        ) : detail.length === 0 ? (
+          <div className="py-10 text-center" data-testid="detail-empty">
+            <p className="text-sm text-gray-400">Tidak ada pelanggaran sesuai filter.</p>
+          </div>
+        ) : (
+          <>
+            <div className="sm:hidden rounded-xl border border-white/5 divide-y divide-white/[0.04] max-h-[45vh] overflow-auto" data-testid="detail-cards">
+              {visible.map((r) => (
+                <div key={r.id} data-testid="detail-card" className="p-3.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <TypeBadge type={r.type} label={r.typeLabel} />
+                    <span className="text-xs text-gray-500">{formatDateTime(r.timestamp)}</span>
+                  </div>
+                  <p className="text-sm text-gray-300">{r.description}</p>
+                  <div className="flex gap-4 text-xs text-gray-500">
+                    <span>Kecepatan: <span className="text-gray-200"><Num value={r.speed} /> km/jam</span></span>
+                    <span>Kemiringan Jalan: <span className="text-gray-200"><Num value={r.tilt} />%</span></span>
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/5">
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">No</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tanggal & Waktu</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tipe</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Keterangan</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Kecepatan</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Kemiringan</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Lokasi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/[0.04]">
-                  {sortedEvents.map((evt, idx) => {
-                    const cfg = typeConfig[evt.type] || { icon: AlertTriangle, color: 'text-gray-400', bg: 'bg-gray-500/10', label: evt.type };
-                    const Icon = cfg.icon;
-
-                    return (
-                      <tr key={evt.id || idx} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="px-5 py-3 text-sm text-gray-500">{idx + 1}</td>
-                        <td className="px-5 py-3 text-sm text-gray-400 whitespace-nowrap">
-                          {formatTimestamp(evt.timestamp)}
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${cfg.bg} ${cfg.color}`}>
-                            <Icon className="w-3.5 h-3.5" />
-                            {cfg.label}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-sm text-gray-300 max-w-[250px] truncate">
-                          {evt.message || '-'}
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className="text-sm font-semibold text-white">{evt.speed ?? '-'}</span>
-                          <span className="text-xs text-gray-500 ml-1">km/h</span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className="text-sm font-semibold text-white">{evt.tilt ?? '-'}</span>
-                          <span className="text-xs text-gray-500 ml-1">°</span>
-                        </td>
-                        <td className="px-5 py-3">
-                          {evt.lat ? (
-                            <div className="flex items-center gap-1 text-xs text-gray-500 font-mono">
-                              <MapPin className="w-3 h-3 flex-shrink-0" />
-                              {evt.lat.toFixed(4)}, {evt.lng.toFixed(4)}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-600">-</span>
-                          )}
-                        </td>
+            <div className="hidden sm:block rounded-xl border border-white/5 overflow-hidden">
+              <div className="overflow-auto max-h-[45vh]">
+                <table className="w-full text-sm" data-testid="detail-table">
+                  <thead className="sticky top-0 bg-dark-secondary">
+                    <tr className="border-b border-white/5">
+                      {['Waktu', 'Tipe', 'Keterangan', 'Kecepatan (km/jam)', 'Kemiringan Jalan (%)'].map((h) => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.04] text-gray-300">
+                    {visible.map((r) => (
+                      <tr key={r.id} data-testid="detail-row" data-type={r.type}>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-400">{formatDateTime(r.timestamp)}</td>
+                        <td className="px-4 py-3"><TypeBadge type={r.type} label={r.typeLabel} /></td>
+                        <td className="px-4 py-3 min-w-[12rem]">{r.description}</td>
+                        <td className="px-4 py-3"><Num value={r.speed} /></td>
+                        <td className="px-4 py-3"><Num value={r.tilt} /></td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-white/10 flex-shrink-0 flex items-center justify-between">
-          <p className="text-xs text-gray-600">
-            Data dari Firebase Realtime Database — path: vehicles/{driver.vehicleId}/events
-          </p>
-          <button onClick={onClose}
-            className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-sm transition-all">
-            Tutup
-          </button>
-        </div>
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span data-testid="detail-count">Menampilkan {visible.length} dari {detail.length}</span>
+              {visible.length < detail.length && (
+                <button type="button" onClick={() => setShown((n) => n + STEP)} data-testid="detail-more"
+                  className="px-3 py-1.5 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">
+                  Tampilkan lebih banyak
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
