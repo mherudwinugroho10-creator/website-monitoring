@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Menu, Bell, Trash2, CheckCheck, Gauge, Shield, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAlertContext } from '../../context/AlertContext';
+import { roleLabel, initialsOf } from '../../utils/profileLogic';
 
 function getAlertIcon(type) {
   switch (type) {
@@ -36,7 +37,8 @@ export default function Navbar({ toggleSidebar }) {
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Selamat Pagi' : hour < 15 ? 'Selamat Siang' : hour < 18 ? 'Selamat Sore' : 'Selamat Malam';
-  const initials = userData?.name ? userData.name.charAt(0).toUpperCase() : 'U';
+  const displayName = userData?.name || userData?.email || 'Pengguna';
+  const initials = initialsOf(userData?.name || userData?.email);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -58,12 +60,13 @@ export default function Navbar({ toggleSidebar }) {
     <header className="h-16 bg-dark-secondary border-b border-white/5 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
       {/* Left */}
       <div className="flex items-center gap-4">
-        <button onClick={toggleSidebar} className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+        <button onClick={toggleSidebar} aria-label="Menu navigasi" data-testid="nav-menu"
+          className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
           <Menu className="w-5 h-5" />
         </button>
         <div className="hidden sm:block">
           <p className="text-sm text-white font-medium">
-            {greeting}, <span className="text-gold">{userData?.name || 'User'}</span>
+            {greeting}, <span className="text-gold">{displayName}</span>
           </p>
         </div>
       </div>
@@ -72,7 +75,9 @@ export default function Navbar({ toggleSidebar }) {
       <div className="flex items-center gap-3">
         {/* Bell Notification */}
         <div className="relative" ref={dropdownRef}>
-          <button onClick={handleBellClick}
+          <button onClick={handleBellClick} data-testid="nav-bell"
+            aria-label={unreadCount > 0 ? `Notifikasi, ${unreadCount} belum dibaca` : 'Notifikasi'}
+            aria-expanded={showDropdown} aria-haspopup="true"
             className="relative p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
@@ -82,9 +87,10 @@ export default function Navbar({ toggleSidebar }) {
             )}
           </button>
 
-          {/* Dropdown */}
+          {/* Dropdown: pada layar sempit melebar mengikuti layar (bukan 380 px tetap) agar tidak terpotong */}
           {showDropdown && (
-            <div className="absolute right-0 top-12 w-[380px] max-h-[480px] bg-dark-secondary border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden z-50">
+            <div data-testid="nav-dropdown"
+              className="fixed left-4 right-4 top-[4.25rem] sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[380px] max-h-[480px] bg-dark-secondary border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden z-50">
               {/* Header */}
               <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
                 <div>
@@ -93,11 +99,11 @@ export default function Navbar({ toggleSidebar }) {
                 </div>
                 {notifications.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <button onClick={markAllRead}
+                    <button onClick={markAllRead} aria-label="Tandai semua dibaca" data-testid="nav-mark-read"
                       className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition-colors" title="Tandai semua dibaca">
                       <CheckCheck className="w-4 h-4" />
                     </button>
-                    <button onClick={() => { clearAll(); setShowDropdown(false); }}
+                    <button onClick={() => { clearAll(); setShowDropdown(false); }} aria-label="Hapus semua notifikasi" data-testid="nav-clear-all"
                       className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors" title="Hapus semua">
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -118,7 +124,7 @@ export default function Navbar({ toggleSidebar }) {
                     const Icon = getAlertIcon(n.type);
                     const colorClass = getAlertColor(n.severity);
                     return (
-                      <div key={n.id} className={`px-4 py-3 flex items-start gap-3 hover:bg-white/[0.02] transition-colors ${!n.read ? 'bg-white/[0.01]' : ''}`}>
+                      <div key={n.id} data-testid="nav-notification" className={`px-4 py-3 flex items-start gap-3 hover:bg-white/[0.02] transition-colors ${!n.read ? 'bg-white/[0.01]' : ''}`}>
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass}`}>
                           <Icon className="w-4 h-4" />
                         </div>
@@ -127,9 +133,9 @@ export default function Navbar({ toggleSidebar }) {
                           {n.details && <p className="text-xs text-gray-500 mt-0.5 truncate">{n.details}</p>}
                           <p className="text-xs text-gray-600 mt-1">{timeAgo(n.timestamp)}</p>
                         </div>
-                        <button onClick={() => removeNotification(n.id)}
-                          className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Trash2 className="w-3 h-3" />
+                        <button onClick={() => removeNotification(n.id)} aria-label="Hapus notifikasi ini" data-testid="nav-remove"
+                          className="p-1.5 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 flex-shrink-0 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     );
@@ -142,11 +148,11 @@ export default function Navbar({ toggleSidebar }) {
 
         {/* Avatar */}
         <div className="text-right hidden sm:block">
-          <p className="text-sm font-medium text-white">{userData?.name || 'User'}</p>
-          <p className="text-xs text-gray-500">{userData?.role === 'admin' ? 'Administrator' : 'Driver'}</p>
+          <p className="text-sm font-medium text-white" data-testid="nav-user-name">{displayName}</p>
+          <p className="text-xs text-gray-500" data-testid="nav-user-role">{roleLabel(userData?.role)}</p>
         </div>
         <div className="w-9 h-9 rounded-lg bg-gold/10 flex items-center justify-center">
-          <span className="text-sm font-semibold text-gold">{initials}</span>
+          <span className="text-sm font-semibold text-gold" data-testid="nav-initials">{initials}</span>
         </div>
       </div>
     </header>

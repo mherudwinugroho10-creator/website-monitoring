@@ -77,7 +77,7 @@ export default function UserSidebar({ isOpen, setIsOpen }) {
             <div className="px-4 py-3 border-b border-white/[0.06]">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-500/10 text-blue-400 text-xs font-medium">
                 <Activity className="w-3.5 h-3.5" />
-                Driver / Operator
+                Pengemudi
               </span>
             </div>
           )}
@@ -132,8 +132,8 @@ export default function UserSidebar({ isOpen, setIsOpen }) {
                   <span className="text-sm font-semibold text-gold">{initials}</span>
                 </div>
                 <div className="overflow-hidden">
-                  <p className="text-sm font-medium text-white truncate">{userData.name || 'User'}</p>
-                  <p className="text-xs text-gray-500 truncate">Driver / Operator</p>
+                  <p className="text-sm font-medium text-white truncate">{userData.name || userData.email || 'Pengguna'}</p>
+                  <p className="text-xs text-gray-500 truncate">Pengemudi</p>
                 </div>
               </div>
             </div>
