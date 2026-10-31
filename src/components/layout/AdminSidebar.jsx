@@ -88,7 +88,7 @@ export default function AdminSidebar({ isOpen, setIsOpen }) {
           <nav className="flex-1 py-4 overflow-y-auto">
             <div className="px-3 mb-6">
               {isOpen && (
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3 px-3">Management</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3 px-3">Manajemen</p>
               )}
               <ul className="space-y-1">
                 {menuItems.map((item) => <MenuLink key={item.path} item={item} />)}
