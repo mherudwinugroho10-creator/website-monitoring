@@ -55,9 +55,7 @@ export default function SessionCard({ group, defaultOpen = false, serverNow, onE
                   {formatDurationMs(sessionDurationMs(session, serverNow()))}
                 </span>
               </span>
-            ) : (
-              <span className="block text-xs text-gray-600 mt-1">Baris yang waktunya tidak berada dalam sesi yang dimuat</span>
-            )}
+            ) : null}
             <span className="flex items-center gap-3 mt-2 text-xs flex-wrap" data-testid="session-counts">
               <Count label="Overspeed" value={counts.overspeed} activeClass="text-orange-400" />
               <Count label="Forced Brake" value={counts.forcedBrake} activeClass="text-red-400" />
@@ -85,7 +83,7 @@ export default function SessionCard({ group, defaultOpen = false, serverNow, onE
             <h5 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5">Data Sesi ({rows.length})</h5>
             <div className="rounded-xl border border-white/[0.05] overflow-hidden">
               <LogTable rows={rows} scrollClass="max-h-96" testId="session-table"
-                emptyTitle="Belum ada data pada sesi ini" emptyHint="Rekaman berkala dan event sesi ini akan muncul di sini." />
+                emptyTitle="Belum ada data pada sesi ini" />
             </div>
           </div>
         </div>

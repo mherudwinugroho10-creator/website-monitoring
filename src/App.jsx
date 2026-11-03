@@ -33,7 +33,7 @@ import LoadingScreen from './components/common/LoadingScreen';
 function RequireAuth({ children, requiredRole }) {
   const auth = useAuth();
   if (auth.loading) return <LoadingScreen message="Memverifikasi akun..." />;
-  if (!auth.currentUser) return <Navigate to="/login" replace />;
+  if (!auth.currentUser) return <Navigate to={requiredRole === 'admin' ? '/admin/login' : '/login'} replace />;
   const userRole = auth.userData?.role || 'user';
   if (requiredRole === 'admin' && userRole !== 'admin') return <Navigate to="/dashboard" replace />;
   if (requiredRole === 'user'  && userRole === 'admin') return <Navigate to="/admin"     replace />;

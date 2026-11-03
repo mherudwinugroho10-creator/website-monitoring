@@ -21,12 +21,14 @@ const PAGE_SIZE = 20;
 
 function StatCard({ icon: Icon, label, value, color, bg, testId }) {
   return (
-    <div className="bg-dark-secondary rounded-2xl border border-white/5 p-5" data-testid={testId}>
-      <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center mb-3`}>
+    <div className="bg-dark-secondary rounded-2xl border border-white/5 p-3.5 sm:p-5 flex flex-col items-start gap-2.5 sm:flex-row sm:items-center sm:gap-4 min-w-0" data-testid={testId}>
+      <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
         <Icon className={`w-5 h-5 ${color}`} />
       </div>
-      <div className={`text-2xl font-bold font-mono ${color}`} data-testid={`${testId}-value`}>{value}</div>
-      <div className="text-xs text-gray-500 mt-1">{label}</div>
+      <div className="min-w-0">
+        <div className={`text-2xl font-bold font-mono leading-none ${color}`} data-testid={`${testId}-value`}>{value}</div>
+        <div className="text-xs text-gray-500 mt-1.5">{label}</div>
+      </div>
     </div>
   );
 }
@@ -143,7 +145,7 @@ export default function BehaviorLog() {
               </span>
             )}
           </div>
-          <p className="text-gray-400 mt-1">{vehicleLabel ? `${vehicleLabel} · ` : ''}Rekaman perilaku berkendara dan kejadian bahaya kendaraan.</p>
+          {vehicleLabel && <p className="text-gray-400 mt-1" data-testid="vehicle-label">{vehicleLabel}</p>}
         </div>
         {hasVehicle && (
           <div className="flex items-center gap-3 flex-wrap sm:flex-shrink-0">
@@ -207,7 +209,7 @@ export default function BehaviorLog() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
             <StatCard testId="bl-card-total" icon={Activity} label="Total Event" value={loaded ? summary.total : '—'} color="text-white" bg="bg-white/5" />
             <StatCard testId="bl-card-overspeed" icon={Gauge} label="Overspeed" value={loaded ? summary.overspeed : '—'} color="text-orange-400" bg="bg-orange-500/10" />
             <StatCard testId="bl-card-forced" icon={Shield} label="Forced Brake" value={loaded ? summary.forcedBrake : '—'} color="text-red-400" bg="bg-red-500/10" />
@@ -221,7 +223,7 @@ export default function BehaviorLog() {
           {!loaded ? (
             <div className="bg-dark-secondary rounded-2xl border border-white/5 py-16 flex flex-col items-center gap-3" data-testid="bl-loading">
               <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
-              <p className="text-sm text-gray-500">Memuat data Behavior Log…</p>
+              <p className="text-sm text-gray-500">Memuat…</p>
             </div>
           ) : tab === 'all' ? (
             <>
@@ -235,8 +237,8 @@ export default function BehaviorLog() {
 
               <div className="bg-dark-secondary rounded-2xl border border-white/5 overflow-hidden">
                 <LogTable rows={pageRows} testId="log-table"
-                  emptyTitle={rangeError ? 'Rentang tanggal tidak valid' : noDataAtAll ? 'Belum ada data Behavior Log' : 'Tidak ada data sesuai filter'}
-                  emptyHint={rangeError ? rangeError : noDataAtAll ? 'Data muncul otomatis setelah perangkat IoT mengirim rekaman berkala dan event.' : 'Ubah atau reset filter untuk melihat data lain.'} />
+                  emptyTitle={rangeError ? 'Rentang tanggal tidak valid' : noDataAtAll ? 'Belum ada data' : 'Tidak ada data sesuai filter'}
+                  emptyHint={rangeError || undefined} />
                 {filtered.length > PAGE_SIZE && (
                   <div className="px-5 py-4 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <span className="text-sm text-gray-500" data-testid="bl-page-info">
@@ -259,7 +261,6 @@ export default function BehaviorLog() {
             </>
           ) : (
             <div className="space-y-3" data-testid="bl-sessions">
-              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Riwayat Sesi</h3>
               {rangeError ? (
                 <div className="bg-dark-secondary rounded-2xl border border-white/5 py-14 text-center" data-testid="bl-empty">
                   <p className="text-sm text-gray-400">Rentang tanggal tidak valid</p>
@@ -270,10 +271,7 @@ export default function BehaviorLog() {
                   <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
                     <History className="w-6 h-6 text-gray-600" />
                   </div>
-                  <p className="text-sm text-gray-400">{noDataAtAll ? 'Belum ada riwayat sesi tercatat' : 'Tidak ada sesi sesuai filter'}</p>
-                  <p className="text-xs text-gray-600">
-                    {noDataAtAll ? 'Sesi muncul otomatis setelah perangkat IoT memulai perjalanan.' : 'Ubah atau reset filter untuk melihat sesi lain.'}
-                  </p>
+                  <p className="text-sm text-gray-400">{noDataAtAll ? 'Belum ada riwayat sesi' : 'Tidak ada sesi sesuai filter'}</p>
                 </div>
               ) : (
                 groups.map((group, index) => (
@@ -286,7 +284,7 @@ export default function BehaviorLog() {
 
           <p className="flex items-start gap-2 text-xs text-gray-600" data-testid="bl-limit-note">
             <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-            Menampilkan hingga {EVENTS_LIMIT} event dan {SESSIONS_LIMIT} sesi terbaru. Tampilan diperbarui otomatis saat perangkat mengirim data baru.
+            Menampilkan hingga {EVENTS_LIMIT} event dan {SESSIONS_LIMIT} sesi terbaru.
           </p>
         </>
       )}

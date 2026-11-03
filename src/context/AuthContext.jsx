@@ -32,6 +32,12 @@ const MSG = {
   generic: 'Gagal memuat data akun. Coba lagi.',
 };
 
+// Formulir login hanya menerima satu peran: Masuk untuk pengemudi, Login Admin untuk admin.
+const WRONG_ROLE_MSG = {
+  user: 'Akun admin tidak dapat masuk di sini. Gunakan Login Admin.',
+  admin: 'Akun pengemudi tidak dapat masuk di sini. Gunakan menu Masuk.',
+};
+
 function withTimeout(promise, ms) {
   let timer;
   const timeout = new Promise((_resolve, reject) => {
@@ -101,7 +107,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const registeringRef = useRef(false);     // register() sedang berjalan: pengamat auth menunggu
-  const loginActiveRef = useRef(false);     // login() sedang berjalan: galat ditampilkan oleh halamannya
+  const loginActiveRef = useRef(false);     // login() sedang berjalan: login() sendiri yang menerapkan sesinya
+  const rejectedUidRef = useRef(null);      // UID yang loginnya baru ditolak: kejadian auth yang terlambat untuk UID ini diabaikan
   const appliedUidRef = useRef(null);       // UID yang profilnya sudah diterapkan ke state
   const profileJobRef = useRef(null);       // { uid, promise }: satu pembacaan profil dipakai bersama
   const unsubProfileRef = useRef(null);
@@ -205,14 +212,19 @@ export function AuthProvider({ children }) {
       const gen = ++genRef.current;
 
       if (!user) {
+        rejectedUidRef.current = null; // Auth sudah melaporkan keluar
         clearSession();
         setLoading(false);
         return;
       }
+      if (rejectedUidRef.current === user.uid) return;
       if (appliedUidRef.current === user.uid) {
         setLoading(false);
         return;
       }
+      // Selama login() berjalan, sesi baru belum boleh dipakai: login() memeriksa peran akun lebih dulu,
+      // lalu menerapkan atau menolak sesinya sendiri.
+      if (loginActiveRef.current) return;
 
       setLoading(true);
       const result = await getProfileJob(user);
@@ -226,10 +238,10 @@ export function AuthProvider({ children }) {
         // Gangguan jaringan atau izin: sesi Auth dibiarkan, tetapi pengguna belum dianggap masuk.
         clearSession();
         setLoading(false);
-        if (!loginActiveRef.current) showError(result.message);
+        showError(result.message);
         return;
       }
-      blockSession(result.message, { silent: loginActiveRef.current });
+      blockSession(result.message);
     });
 
     return () => {
@@ -279,19 +291,28 @@ export function AuthProvider({ children }) {
     }
   }, [applyProfile]);
 
-  const login = useCallback(async (email, password) => {
+  // expectedRole: 'user' (formulir Masuk) atau 'admin' (Login Admin). Akun berperan lain ditolak sebelum
+  // sesinya diterapkan, sehingga tidak pernah terlihat sebagai pengguna yang sudah masuk. Tanpa
+  // expectedRole yang jelas, yang diterima hanya akun pengemudi.
+  const login = useCallback(async (email, password, expectedRole) => {
+    const wanted = expectedRole === 'admin' ? 'admin' : 'user';
     loginActiveRef.current = true;
     profileJobRef.current = null; // selalu baca profil terbaru
     try {
       const cred = await signInWithEmailAndPassword(firebaseAuth, normalizeEmail(email), password);
       const user = cred.user;
+      // Menolak sesi. Galatnya ditampilkan oleh halaman login, bukan oleh konteks ini.
+      const reject = (message, extra) => {
+        rejectedUidRef.current = user.uid;
+        blockSession(message, { silent: true });
+        return { success: false, error: message, ...extra };
+      };
       const result = await getProfileJob(user);
-      if (!result.ok) {
-        blockSession(result.message, { silent: true }); // halaman login menampilkan galatnya
-        return { success: false, error: result.message };
-      }
+      if (!result.ok) return reject(result.message);
+      const role = roleOf(result.data);
+      if (role !== wanted) return reject(WRONG_ROLE_MSG[wanted], { reason: 'wrong-role' });
       applyProfile(user, result.data);
-      return { success: true, role: roleOf(result.data) };
+      return { success: true, role };
     } catch (error) {
       return { success: false, error: describeLoginError(error) };
     } finally {

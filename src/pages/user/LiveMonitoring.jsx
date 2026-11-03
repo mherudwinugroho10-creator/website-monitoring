@@ -57,7 +57,7 @@ export default function LiveMonitoring() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white">Live Monitoring</h1>
-            <p className="text-gray-400 mt-1">{vehicleLabel || 'Data sensor kendaraan secara realtime.'}</p>
+            {vehicleLabel && <p className="text-gray-400 mt-1" data-testid="vehicle-label">{vehicleLabel}</p>}
           </div>
           {hasVehicle && (
             <div className="flex flex-col items-start sm:items-end gap-1">
@@ -91,9 +91,7 @@ export default function LiveMonitoring() {
                 <div>
                   <p className="text-sm text-gray-200">Perangkat tidak mengirim data.</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {lastUpdate !== null
-                      ? `Data terakhir diterima pukul ${formatClock(lastUpdate)}. Tampilan pulih otomatis saat data masuk.`
-                      : 'Belum ada data dari perangkat kendaraan ini. Tampilan akan terisi otomatis saat data masuk.'}
+                    {lastUpdate !== null ? `Data terakhir pukul ${formatClock(lastUpdate)}.` : 'Belum ada data dari perangkat.'}
                   </p>
                 </div>
               </div>

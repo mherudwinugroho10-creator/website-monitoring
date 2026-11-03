@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 
 export default function UserSidebar({ isOpen, setIsOpen }) {
-  const { userData, logout } = useAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const menuItems = [
@@ -20,8 +20,6 @@ export default function UserSidebar({ isOpen, setIsOpen }) {
       navigate('/login');
     }
   }
-
-  const initials = userData?.name ? userData.name.charAt(0).toUpperCase() : 'U';
 
   function MenuLink({ item }) {
     return (
@@ -72,16 +70,6 @@ export default function UserSidebar({ isOpen, setIsOpen }) {
             )}
           </div>
 
-          {/* Role Badge */}
-          {isOpen && (
-            <div className="px-4 py-3 border-b border-white/[0.06]">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-500/10 text-blue-400 text-xs font-medium">
-                <Activity className="w-3.5 h-3.5" />
-                Pengemudi
-              </span>
-            </div>
-          )}
-
           {/* Menu */}
           <nav className="flex-1 py-4 overflow-y-auto">
             <div className="px-3 mb-6">
@@ -124,20 +112,6 @@ export default function UserSidebar({ isOpen, setIsOpen }) {
             </div>
           </nav>
 
-          {/* Footer User Info */}
-          {isOpen && userData && (
-            <div className="p-4 border-t border-white/[0.06]">
-              <div className="flex items-center gap-3 px-2">
-                <div className="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-semibold text-gold">{initials}</span>
-                </div>
-                <div className="overflow-hidden">
-                  <p className="text-sm font-medium text-white truncate">{userData.name || userData.email || 'Pengguna'}</p>
-                  <p className="text-xs text-gray-500 truncate">Pengemudi</p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </aside>
     </div>

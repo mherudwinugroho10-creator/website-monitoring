@@ -90,11 +90,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-gray-400 mt-1">Pantau seluruh kendaraan secara realtime.</p>
-        </div>
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
         <div className="flex flex-wrap items-center gap-2" data-testid="fleet-summary">
           <span data-testid="chip-connected" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-green-500/10 border-green-500/20 text-green-400 text-sm font-medium">
             <Wifi className="w-4 h-4" /> {summary.connected} terhubung
@@ -111,7 +108,7 @@ export default function AdminDashboard() {
       <div>
         <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 mb-3">
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Kejadian Hari Ini</h2>
-          <p className="text-xs text-gray-600" data-testid="today-date">{formatDay(dayStart)} · seluruh kendaraan</p>
+          <p className="text-xs text-gray-600" data-testid="today-date">{formatDay(dayStart)}</p>
         </div>
         {todayErrorIds.length > 0 && (
           <div className="mb-3">
@@ -120,36 +117,35 @@ export default function AdminDashboard() {
         )}
         <div className="grid grid-cols-2 gap-4">
           {cards.map((c) => (
-            <div key={c.key} data-testid={`today-${c.key}`} className="bg-dark-secondary rounded-2xl border border-white/5 p-5">
-              <div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center mb-3`}>
+            <div key={c.key} data-testid={`today-${c.key}`} className="bg-dark-secondary rounded-2xl border border-white/5 p-5 flex items-center gap-4">
+              <div className={`w-11 h-11 rounded-xl ${c.bg} flex items-center justify-center flex-shrink-0`}>
                 <c.icon className={`w-5 h-5 ${c.color}`} />
               </div>
-              <div className={`text-3xl font-bold font-mono ${c.value === null ? 'text-gray-600' : c.color}`} data-testid={`today-${c.key}-value`}>
-                {c.value === null ? '—' : c.value}
+              <div className="min-w-0">
+                <div className={`text-3xl font-bold font-mono leading-none ${c.value === null ? 'text-gray-600' : c.color}`} data-testid={`today-${c.key}-value`}>
+                  {c.value === null ? '—' : c.value}
+                </div>
+                <div className="text-xs text-gray-500 mt-1.5">{c.title}</div>
               </div>
-              <div className="text-xs text-gray-500 mt-1">{c.title}</div>
             </div>
           ))}
         </div>
       </div>
 
-      <FleetAlertPanel alerts={alerts} nowMs={nowMs} vehicleCount={ids.length} ready={countsReady} />
+      <FleetAlertPanel alerts={alerts} nowMs={nowMs} ready={countsReady} />
 
       <div className="bg-dark-secondary rounded-2xl border border-white/5 overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-5 border-b border-white/5">
-          <div>
-            <h2 className="text-base font-semibold text-white flex items-start gap-2">
-              <Truck className="w-4 h-4 text-gold flex-shrink-0 mt-1" /> <span>Data Monitoring Realtime – Seluruh Kendaraan</span>
-            </h2>
-            <p className="text-xs text-gray-500 mt-1">Diperbarui otomatis. Kendaraan dianggap terputus bila tidak mengirim data lebih dari 15 detik.</p>
-          </div>
+          <h2 className="text-base font-semibold text-white flex items-start gap-2">
+            <Truck className="w-4 h-4 text-gold flex-shrink-0 mt-1" /> <span>Data Monitoring Realtime – Seluruh Kendaraan</span>
+          </h2>
           <Link to="/admin/settings" className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gold transition-colors">
             <Settings className="w-3.5 h-3.5" /> Atur batas kecepatan
           </Link>
         </div>
         {settingsErrorIds.length > 0 && (
           <div className="p-4 border-b border-white/5">
-            <ErrorBanner testId="settings-error">Batas kecepatan gagal dibaca untuk: {settingsErrorIds.map(labelOf).join(', ')}. Penanda overspeed pada tabel memakai batas standar 80 km/jam untuk jalan datar.</ErrorBanner>
+            <ErrorBanner testId="settings-error">Batas kecepatan gagal dibaca untuk: {settingsErrorIds.map(labelOf).join(', ')}. Tabel memakai batas standar 80 km/jam.</ErrorBanner>
           </div>
         )}
         <FleetTable rows={rows} loading={directoryLoading} />

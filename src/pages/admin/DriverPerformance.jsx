@@ -33,12 +33,14 @@ const COLUMNS = [
 
 function StatCard({ icon: Icon, label, value, color, bg, testId }) {
   return (
-    <div className="bg-dark-secondary rounded-2xl border border-white/5 p-5" data-testid={testId}>
-      <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center mb-3`}>
+    <div className="bg-dark-secondary rounded-2xl border border-white/5 p-3.5 sm:p-5 flex flex-col items-start gap-2.5 sm:flex-row sm:items-center sm:gap-4 min-w-0" data-testid={testId}>
+      <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
         <Icon className={`w-5 h-5 ${color}`} />
       </div>
-      <div className={`text-2xl font-bold font-mono ${value === null ? 'text-gray-600' : color}`} data-testid={`${testId}-value`}>{value === null ? '—' : value}</div>
-      <div className="text-xs text-gray-500 mt-1">{label}</div>
+      <div className="min-w-0">
+        <div className={`text-2xl font-bold font-mono leading-none ${value === null ? 'text-gray-600' : color}`} data-testid={`${testId}-value`}>{value === null ? '—' : value}</div>
+        <div className="text-xs text-gray-500 mt-1.5">{label}</div>
+      </div>
     </div>
   );
 }
@@ -248,10 +250,7 @@ export default function DriverPerformance() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-white">Performa Pengemudi</h1>
-          <p className="text-gray-400 mt-1">Rekap pelanggaran dan riwayat sesi seluruh pengemudi.</p>
-        </div>
+        <h1 className="text-2xl font-bold text-white min-w-0">Performa Pengemudi</h1>
         <div className="flex items-center gap-3 flex-wrap sm:flex-shrink-0">
           <button type="button" onClick={() => setShowFilters((v) => !v)} data-testid="perf-filter-toggle" aria-expanded={showFilters}
             className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all border ${
@@ -317,7 +316,7 @@ export default function DriverPerformance() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <StatCard testId="perf-card-drivers" icon={Users} label="Pengemudi" value={directory.loaded && !perf.rangeError ? perf.totals.drivers : null} color="text-blue-400" bg="bg-blue-500/10" />
         <StatCard testId="perf-card-overspeed" icon={Gauge} label="Total Overspeed" value={cardValue(perf.totals.overspeed, type === 'forced_brake')} color="text-orange-400" bg="bg-orange-500/10" />
         <StatCard testId="perf-card-forced" icon={Shield} label="Total Forced Brake" value={cardValue(perf.totals.forcedBrake, type === 'overspeed')} color="text-red-400" bg="bg-red-500/10" />
@@ -337,7 +336,7 @@ export default function DriverPerformance() {
           {!directory.loaded ? (
             <div className="py-16 flex flex-col items-center gap-3" data-testid="perf-loading">
               <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
-              <p className="text-sm text-gray-500">Memuat data pengemudi…</p>
+              <p className="text-sm text-gray-500">Memuat…</p>
             </div>
           ) : perf.rangeError ? (
             <div className="py-14 text-center" data-testid="perf-empty">
@@ -348,7 +347,7 @@ export default function DriverPerformance() {
             <div className="py-14 flex flex-col items-center gap-3 text-center px-4" data-testid="perf-empty">
               <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center"><Users className="w-6 h-6 text-gray-600" /></div>
               <p className="text-sm text-gray-400">Belum ada pengemudi terdaftar</p>
-              <p className="text-xs text-gray-600">Tambahkan di <Link to="/admin/drivers" className="text-gold hover:underline">Kelola Pengemudi</Link>; rekap muncul setelah ia mendaftar.</p>
+              <Link to="/admin/drivers" className="text-xs text-gold hover:underline">Kelola Pengemudi</Link>
             </div>
           ) : sorted.length === 0 ? (
             <div className="py-12 text-center px-4" data-testid="perf-empty">
@@ -432,14 +431,13 @@ export default function DriverPerformance() {
         </div>
       ) : (
         <div className="space-y-3" data-testid="perf-sessions">
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Riwayat Sesi</h3>
           {sessionErrorIds.length > 0 && (
             <Banner testId="perf-sessions-error">Gagal membaca sesi untuk: {sessionErrorIds.map(labelOfVehicle).join(', ')}.</Banner>
           )}
           {!directory.loaded || !sessionsLoaded ? (
             <div className="bg-dark-secondary rounded-2xl border border-white/5 py-16 flex flex-col items-center gap-3" data-testid="perf-sessions-loading">
               <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
-              <p className="text-sm text-gray-500">Memuat riwayat sesi…</p>
+              <p className="text-sm text-gray-500">Memuat…</p>
             </div>
           ) : sessionData.rangeError ? (
             <div className="bg-dark-secondary rounded-2xl border border-white/5 py-14 text-center" data-testid="perf-sessions-empty">
@@ -452,10 +450,7 @@ export default function DriverPerformance() {
                 {vehicleIds.length === 0 ? <Truck className="w-6 h-6 text-gray-600" /> : <History className="w-6 h-6 text-gray-600" />}
               </div>
               <p className="text-sm text-gray-400">
-                {vehicleIds.length === 0 ? 'Belum ada pengemudi dengan kendaraan' : anyFilter ? 'Tidak ada sesi sesuai filter' : 'Belum ada riwayat sesi tercatat'}
-              </p>
-              <p className="text-xs text-gray-600">
-                {anyFilter ? 'Ubah atau reset filter untuk melihat sesi lain.' : 'Sesi muncul otomatis setelah perangkat IoT memulai perjalanan.'}
+                {vehicleIds.length === 0 ? 'Belum ada pengemudi dengan kendaraan' : anyFilter ? 'Tidak ada sesi sesuai filter' : 'Belum ada riwayat sesi'}
               </p>
             </div>
           ) : (
@@ -479,9 +474,8 @@ export default function DriverPerformance() {
       <p className="flex items-start gap-2 text-xs text-gray-600" data-testid="perf-limit-note">
         <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
         <span>
-          Rekap dihitung dari hingga {PERFORMANCE_EVENTS_LIMIT} event terbaru per kendaraan{sessionsOn ? ` dan ${SESSIONS_LIMIT} sesi terbaru per kendaraan` : ''}.
-          {tab === 'sessions' && ' Tanggal pada tab ini menyaring waktu mulai sesi.'}
-          {truncated.length > 0 && ` Batas tercapai pada: ${truncated.map(labelOfVehicle).join(', ')}; event yang lebih lama tidak ikut terhitung.`}
+          Dihitung dari hingga {PERFORMANCE_EVENTS_LIMIT} event terbaru per kendaraan{sessionsOn ? ` dan ${SESSIONS_LIMIT} sesi terbaru` : ''}.
+          {truncated.length > 0 && ` Batas tercapai pada: ${truncated.map(labelOfVehicle).join(', ')}.`}
         </span>
       </p>
 

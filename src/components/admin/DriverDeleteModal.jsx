@@ -62,19 +62,16 @@ export default function DriverDeleteModal({ row, onClose }) {
 
         {isInvite ? (
           <p className="text-sm text-gray-400 leading-relaxed">
-            Email ini tidak lagi mendapat kendaraan otomatis saat mendaftar. Bila ia sudah telanjur mendaftar,
-            akunnya tidak terpengaruh.
+            Email ini tidak lagi mendapat kendaraan otomatis saat mendaftar.
           </p>
         ) : (
           <div className="space-y-3 text-sm text-gray-400 leading-relaxed" data-testid="delete-disclosure">
             <p>
-              Data pengemudi dihapus dari sistem dan akunnya tidak dapat lagi masuk. Data kendaraan dan riwayat perilaku
-              di Realtime Database tidak ikut terhapus.
+              Data pengemudi dihapus dan akunnya tidak dapat masuk lagi. Riwayat di Realtime Database tidak ikut terhapus.
             </p>
             <p className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3.5 text-yellow-200/90 text-xs">
-              Akun login (Firebase Authentication) milik email ini <strong>tidak</strong> terhapus oleh website. Bila email yang sama
-              perlu didaftarkan ulang, hapus dulu akunnya di Firebase Console → Authentication → Users.
-              Untuk menutup akses tanpa menghapus, gunakan <strong>Nonaktifkan</strong>.
+              Akun login (Firebase Authentication) <strong>tidak</strong> terhapus oleh website. Hapus lewat Firebase Console bila email perlu
+              didaftarkan ulang, atau gunakan <strong>Nonaktifkan</strong>.
             </p>
           </div>
         )}

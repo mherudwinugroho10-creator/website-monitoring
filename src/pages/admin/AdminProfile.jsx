@@ -6,10 +6,10 @@ import { useAdminAccess } from '../../hooks/useAdminData';
 
 const PHONE_PATTERN = /^[0-9+\-\s()]{6,20}$/;
 const ACCESS_VIEW = {
-  granted: { icon: CheckCircle2, cls: 'text-green-400', text: 'Diizinkan menyimpan pengaturan batas kecepatan' },
-  denied: { icon: ShieldAlert, cls: 'text-red-400', text: 'Belum diizinkan — tambahkan admins/UID = true di Realtime Database' },
-  unknown: { icon: AlertTriangle, cls: 'text-yellow-400', text: 'Izin tidak dapat diperiksa saat ini' },
-  checking: { icon: Loader2, cls: 'text-gray-400', text: 'Memeriksa izin…', spin: true },
+  granted: { icon: CheckCircle2, cls: 'text-green-400', text: 'Diizinkan' },
+  denied: { icon: ShieldAlert, cls: 'text-red-400', text: 'Belum diizinkan' },
+  unknown: { icon: AlertTriangle, cls: 'text-yellow-400', text: 'Tidak dapat diperiksa' },
+  checking: { icon: Loader2, cls: 'text-gray-400', text: 'Memeriksa…', spin: true },
 };
 
 function joinedText(createdAt) {
@@ -18,17 +18,14 @@ function joinedText(createdAt) {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-// stacked: nilai panjang (teks status) selalu di bawah label, rata kiri, agar tidak terpisah dari ikonnya di kolom sempit.
-function InfoRow({ icon: Icon, label, children, last, stacked }) {
-  const layout = stacked ? 'flex-col gap-1.5' : 'flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4';
-  const align = stacked ? 'pl-7' : 'pl-7 sm:pl-0 sm:text-right';
+function InfoRow({ icon: Icon, label, children, last }) {
   return (
-    <div className={`flex ${layout} py-3 ${last ? '' : 'border-b border-white/5'}`}>
+    <div className={`flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 py-3 ${last ? '' : 'border-b border-white/5'}`}>
       <div className="flex items-center gap-3 flex-shrink-0">
         <Icon className="w-4 h-4 text-gray-500" />
         <span className="text-sm text-gray-400">{label}</span>
       </div>
-      <div className={`min-w-0 ${align}`}>{children}</div>
+      <div className="min-w-0 pl-7 sm:pl-0 sm:text-right">{children}</div>
     </div>
   );
 }
@@ -86,12 +83,9 @@ export default function AdminProfile() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Profil Admin</h1>
-        <p className="text-gray-400 mt-1">Kelola informasi akun administrator.</p>
-      </div>
+      <h1 className="text-2xl font-bold text-white">Profil</h1>
 
-      {/* Tata letak: satu kolom; mulai 1536 px kartu profil + informasi akun di kolom kiri, formulir di kolom lebar kanan. */}
+      {/* Satu kolom; mulai 1536 px kartu profil di kolom kiri dan formulir di kolom lebar kanan. */}
       <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6 items-start">
         <div className="bg-dark-secondary rounded-2xl border border-white/5 overflow-hidden min-w-0">
           <div className="h-24 bg-gradient-to-r from-gold/20 via-gold/10 to-purple-500/10 relative">
@@ -101,20 +95,41 @@ export default function AdminProfile() {
               </div>
             </div>
           </div>
-          <div className="pt-14 pb-6 px-6">
-            <h2 className="text-xl font-bold text-white" data-testid="admin-name">{savedName || 'Admin'}</h2>
-            <p className="text-gray-400 text-sm" data-testid="admin-email">{userData && userData.email ? userData.email : '—'}</p>
-            <span className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-lg bg-gold/10 text-gold text-xs font-medium">
+          <div className="pt-14 pb-4 px-6">
+            <h2 className="text-xl font-bold text-white break-words" data-testid="admin-name">{savedName || 'Admin'}</h2>
+            <p className="text-gray-400 text-sm break-all" data-testid="admin-email">{userData && userData.email ? userData.email : '—'}</p>
+            <span className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-lg bg-gold/10 text-gold text-xs font-medium">
               <Shield className="w-3 h-3" /> Administrator
             </span>
           </div>
+          <div className="px-6 pb-4 border-t border-white/5 mt-2">
+            <InfoRow icon={Calendar} label="Bergabung">
+              <span className="text-sm text-white" data-testid="admin-joined">{joinedText(userData && userData.createdAt)}</span>
+            </InfoRow>
+            <InfoRow icon={Key} label="UID">
+              <span className="inline-flex items-center gap-2 max-w-full">
+                <span className="text-xs text-gray-400 font-mono break-all" data-testid="admin-uid">{currentUser ? currentUser.uid : '—'}</span>
+                {currentUser && (
+                  <button type="button" onClick={copyUid} aria-label="Salin UID" className="p-1.5 rounded-lg text-gray-500 hover:text-gold hover:bg-white/5 transition-colors flex-shrink-0">
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </span>
+            </InfoRow>
+            <InfoRow icon={Shield} label="Izin Pengaturan" last>
+              <span className={`inline-flex items-center gap-2 text-sm ${view.cls}`} data-testid="admin-access" data-access={access}>
+                <AccessIcon className={`w-4 h-4 flex-shrink-0 ${view.spin ? 'animate-spin' : ''}`} />
+                <span>{view.text}</span>
+              </span>
+            </InfoRow>
+          </div>
         </div>
 
-        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-6 min-w-0 2xl:col-span-2 2xl:row-span-2">
+        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-6 min-w-0 2xl:col-span-2">
           <h3 className="text-lg font-semibold text-white mb-6">Informasi Pribadi</h3>
           <form onSubmit={handleSave} noValidate className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
+              <div className="sm:col-span-2">
                 <label htmlFor="admin-name-input" className="block text-sm font-medium text-gray-300 mb-2">Nama Lengkap</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -141,47 +156,16 @@ export default function AdminProfile() {
                 </div>
                 {errors.phone && <p className="text-xs text-red-400 mt-1.5" data-testid="admin-phone-error">{errors.phone}</p>}
               </div>
-              <div>
-                <label htmlFor="admin-role-input" className="block text-sm font-medium text-gray-300 mb-2">Peran</label>
-                <div className="relative">
-                  <Shield className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                  <input id="admin-role-input" type="text" value="Administrator" disabled
-                    className="w-full pl-11 pr-4 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-gray-500 cursor-not-allowed" />
-                </div>
-              </div>
             </div>
             <div className="pt-2 flex items-center gap-4">
               <button type="submit" disabled={saving} data-testid="admin-save"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-gold hover:bg-gold-dark disabled:opacity-60 text-dark-primary font-semibold rounded-xl transition-all duration-200">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {saving ? 'Menyimpan…' : 'Simpan Perubahan'}
+                {saving ? 'Menyimpan…' : 'Simpan'}
               </button>
               {dirty && !saving && <span className="text-xs text-gold" data-testid="admin-dirty">Ada perubahan yang belum disimpan</span>}
             </div>
           </form>
-        </div>
-
-        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-6 min-w-0">
-          <h3 className="text-lg font-semibold text-white mb-2">Informasi Akun</h3>
-          <InfoRow icon={Calendar} label="Tanggal Bergabung">
-            <span className="text-sm text-white" data-testid="admin-joined">{joinedText(userData && userData.createdAt)}</span>
-          </InfoRow>
-          <InfoRow icon={Key} label="User ID (UID)">
-            <span className="inline-flex items-center gap-2 max-w-full">
-              <span className="text-xs text-gray-400 font-mono break-all" data-testid="admin-uid">{currentUser ? currentUser.uid : '—'}</span>
-              {currentUser && (
-                <button type="button" onClick={copyUid} aria-label="Salin UID" className="p-1.5 rounded-lg text-gray-500 hover:text-gold hover:bg-white/5 transition-colors flex-shrink-0">
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </span>
-          </InfoRow>
-          <InfoRow icon={Shield} label="Izin Pengaturan" last stacked>
-            <span className={`inline-flex items-start gap-2 text-sm ${view.cls}`} data-testid="admin-access" data-access={access}>
-              <AccessIcon className={`w-4 h-4 flex-shrink-0 mt-0.5 ${view.spin ? 'animate-spin' : ''}`} />
-              <span>{view.text}</span>
-            </span>
-          </InfoRow>
         </div>
       </div>
     </div>

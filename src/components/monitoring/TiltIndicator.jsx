@@ -1,4 +1,4 @@
-import { formatNumber, terrainLabel, tiltVisualAngle, TILT_DOWNHILL_THRESHOLD } from '../../utils/vehicleLogic';
+import { formatNumber, terrainLabel, tiltVisualAngle } from '../../utils/vehicleLogic';
 
 // Indikator kemiringan jalan (%): ilustrasi truk di atas jalan, status DATAR atau MENURUN
 // menurut ambang 3%. Status ini informasi, bukan peringatan, jadi tidak memakai warna bahaya.
@@ -15,11 +15,8 @@ export default function TiltIndicator({ tilt, terrain, connected }) {
       ? 'bg-gold/10 text-gold border-gold/30'
       : 'bg-white/5 text-gray-200 border-white/10';
 
-  const caption = !connected
-    ? 'Menunggu data dari alat'
-    : !hasTilt
-      ? 'Sensor kemiringan belum mengirim data'
-      : `Menurun bila kemiringan ≥ ${TILT_DOWNHILL_THRESHOLD}%`;
+  // Keterangan hanya saat belum ada data; status DATAR/MENURUN sudah cukup menjelaskan nilainya.
+  const caption = !connected ? 'Menunggu data dari perangkat' : !hasTilt ? 'Sensor belum mengirim data' : null;
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -59,7 +56,7 @@ export default function TiltIndicator({ tilt, terrain, connected }) {
         <span data-testid="tilt-status" className={`inline-block px-3 py-1 rounded-lg border text-xs font-semibold tracking-wide ${badgeClass}`}>
           {status}
         </span>
-        <p className="text-[11px] text-gray-600">{caption}</p>
+        {caption && <p className="text-[11px] text-gray-600">{caption}</p>}
       </div>
     </div>
   );

@@ -171,13 +171,12 @@ export default function ManageDrivers() {
         {loading ? (
           <div className="py-16 flex flex-col items-center gap-3" data-testid="drivers-loading">
             <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
-            <p className="text-sm text-gray-500">Memuat daftar pengemudi…</p>
+            <p className="text-sm text-gray-500">Memuat…</p>
           </div>
         ) : allRows.length === 0 ? (
           <div className="py-14 flex flex-col items-center gap-3 text-center px-4" data-testid="drivers-empty">
             <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center"><Users className="w-6 h-6 text-gray-600" /></div>
             <p className="text-sm text-gray-400">Belum ada pengemudi</p>
-            <p className="text-xs text-gray-600 max-w-sm">Tambahkan pengemudi beserta kendaraannya. Ia lalu mendaftar sendiri dengan email yang sama.</p>
           </div>
         ) : rows.length === 0 ? (
           <div className="py-12 text-center px-4" data-testid="drivers-no-match">

@@ -8,9 +8,7 @@ export default function NoVehicleNotice() {
         <Truck className="w-7 h-7 text-gold" />
       </div>
       <h2 className="text-lg font-semibold text-white">Kendaraan belum ditetapkan</h2>
-      <p className="text-sm text-gray-400 mt-2 max-w-md mx-auto">
-        Akun Anda belum dikaitkan dengan kendaraan. Hubungi admin untuk menetapkan kendaraan, lalu muat ulang halaman ini.
-      </p>
+      <p className="text-sm text-gray-400 mt-2">Hubungi admin untuk menetapkan kendaraan.</p>
     </div>
   );
 }

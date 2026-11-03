@@ -57,7 +57,7 @@ function AlertRow({ item, nowMs }) {
 
 // Area notifikasi DangerAlert Dashboard Admin: peringatan otomatis untuk event overspeed / forced brake yang
 // berumur <= 5 detik (jam server) pada kendaraan mana pun, lalu hilang sendiri. Bunyi sekali per event baru.
-export default function FleetAlertPanel({ alerts, nowMs, vehicleCount, ready }) {
+export default function FleetAlertPanel({ alerts, nowMs, ready }) {
   const soundedRef = useRef(new Set());
 
   useEffect(() => {
@@ -88,7 +88,6 @@ export default function FleetAlertPanel({ alerts, nowMs, vehicleCount, ready }) 
         <h2 className="text-sm font-semibold text-white flex items-center gap-2">
           <AlertTriangle className={`w-4 h-4 ${active ? 'text-red-400' : 'text-gray-500'}`} />
           DangerAlert
-          <span className="text-xs font-normal text-gray-500">(Notifikasi Otomatis)</span>
         </h2>
         {active && <span className="text-xs text-red-400 font-medium animate-pulse" role="status">{alerts.length} kendaraan</span>}
       </div>
@@ -101,14 +100,7 @@ export default function FleetAlertPanel({ alerts, nowMs, vehicleCount, ready }) 
           <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center flex-shrink-0">
             <ShieldCheck className="w-5 h-5 text-green-400" />
           </div>
-          <div>
-            <p className="text-sm text-gray-300">{ready ? 'Tidak ada peringatan aktif' : 'Menyiapkan pemantauan…'}</p>
-            <p className="text-xs text-gray-600 mt-0.5">
-              {vehicleCount > 0
-                ? `Memantau ${vehicleCount} kendaraan. Peringatan muncul otomatis saat ada overspeed atau forced brake baru.`
-                : 'Peringatan muncul otomatis saat kendaraan mengirim overspeed atau forced brake.'}
-            </p>
-          </div>
+          <p className="text-sm text-gray-300">{ready ? 'Tidak ada peringatan aktif' : 'Memuat…'}</p>
         </div>
       )}
     </section>

@@ -67,7 +67,7 @@ export default function DriverDetailModal({ row, filter, adminName, truncated, o
       subtitle={[row.vehicleName, row.vehiclePlate, row.vehicleId].filter(Boolean).join(' · ') || undefined}
       footer={(
         <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
-          <p className="text-xs text-gray-600">Sesuai filter tipe dan tanggal pada halaman Performa.</p>
+          <span aria-hidden="true" />
           <div className="flex gap-3">
             <button type="button" onClick={onClose} data-autofocus
               className="px-5 py-2.5 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 transition-colors">Tutup</button>
@@ -96,7 +96,7 @@ export default function DriverDetailModal({ row, filter, adminName, truncated, o
           <div className="flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3.5" data-testid="detail-truncated">
             <Info className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-yellow-200/90">
-              Hanya {PERFORMANCE_EVENTS_LIMIT} event terbaru kendaraan ini yang dimuat. Event yang lebih lama tidak ikut terhitung.
+              Hanya {PERFORMANCE_EVENTS_LIMIT} event terbaru yang dihitung.
             </p>
           </div>
         )}
@@ -109,8 +109,7 @@ export default function DriverDetailModal({ row, filter, adminName, truncated, o
         ) : !row.ready ? (
           <div className="py-10 text-center" data-testid="detail-unavailable">
             <AlertCircle className="w-8 h-8 text-yellow-500/80 mx-auto mb-2" />
-            <p className="text-sm text-gray-300">Data event kendaraan ini belum termuat atau gagal dibaca.</p>
-            <p className="text-xs text-gray-600 mt-1">Tutup rincian ini lalu buka lagi setelah halaman memuat ulang datanya.</p>
+            <p className="text-sm text-gray-300">Data kendaraan ini belum termuat atau gagal dibaca.</p>
           </div>
         ) : detail.length === 0 ? (
           <div className="py-10 text-center" data-testid="detail-empty">

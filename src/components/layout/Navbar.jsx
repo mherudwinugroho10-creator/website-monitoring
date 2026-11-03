@@ -35,8 +35,6 @@ export default function Navbar({ toggleSidebar }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Selamat Pagi' : hour < 15 ? 'Selamat Siang' : hour < 18 ? 'Selamat Sore' : 'Selamat Malam';
   const displayName = userData?.name || userData?.email || 'Pengguna';
   const initials = initialsOf(userData?.name || userData?.email);
 
@@ -58,18 +56,10 @@ export default function Navbar({ toggleSidebar }) {
 
   return (
     <header className="h-16 bg-dark-secondary border-b border-white/5 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
-      {/* Left */}
-      <div className="flex items-center gap-4">
-        <button onClick={toggleSidebar} aria-label="Menu navigasi" data-testid="nav-menu"
-          className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
-          <Menu className="w-5 h-5" />
-        </button>
-        <div className="hidden sm:block">
-          <p className="text-sm text-white font-medium">
-            {greeting}, <span className="text-gold">{displayName}</span>
-          </p>
-        </div>
-      </div>
+      <button onClick={toggleSidebar} aria-label="Menu navigasi" data-testid="nav-menu"
+        className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+        <Menu className="w-5 h-5" />
+      </button>
 
       {/* Right */}
       <div className="flex items-center gap-3">
@@ -117,7 +107,6 @@ export default function Navbar({ toggleSidebar }) {
                   <div className="px-4 py-10 text-center">
                     <Bell className="w-8 h-8 text-gray-600 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">Belum ada notifikasi</p>
-                    <p className="text-xs text-gray-600 mt-1">Peringatan overspeed dan forced brake akan muncul di sini</p>
                   </div>
                 ) : (
                   notifications.map((n) => {
@@ -146,7 +135,7 @@ export default function Navbar({ toggleSidebar }) {
           )}
         </div>
 
-        {/* Avatar */}
+        {/* Identitas akun */}
         <div className="text-right hidden sm:block">
           <p className="text-sm font-medium text-white" data-testid="nav-user-name">{displayName}</p>
           <p className="text-xs text-gray-500" data-testid="nav-user-role">{roleLabel(userData?.role)}</p>

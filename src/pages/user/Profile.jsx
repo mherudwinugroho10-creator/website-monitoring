@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { User, Mail, Shield, Calendar, Save, Key, Phone, Truck, Copy, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { User, Mail, Shield, Calendar, Save, Phone, Truck, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { withTimeout } from '../../utils/asyncUtils';
 import {
@@ -23,7 +22,7 @@ function InfoRow({ icon: Icon, label, children, last, testId }) {
   );
 }
 
-// Profil pengemudi. Semua nilai berasal dari akun yang sedang masuk (Firebase Auth dan users/{uid});
+// Profil pengemudi. Semua nilai berasal dari akun yang sedang masuk (users/{uid});
 // bila suatu data memang tidak ada, yang tampil adalah "—" atau "Belum ditetapkan", bukan nilai contoh.
 export default function Profile() {
   const { currentUser, userData, updateUserProfile } = useAuth();
@@ -38,7 +37,6 @@ export default function Profile() {
   const status = accountStatus(saved);
   const vehicle = vehicleSummary(saved);
   const joined = formatJoinedDate(saved.createdAt);
-  const uid = currentUser ? currentUser.uid : (saved.uid || '');
   const email = saved.email || (currentUser && currentUser.email) || '';
 
   function change(field, value) {
@@ -73,29 +71,15 @@ export default function Profile() {
     }
   }
 
-  async function copyUid() {
-    try {
-      await navigator.clipboard.writeText(uid);
-      toast.success('UID disalin.');
-    } catch {
-      toast.error('Tidak dapat menyalin. Salin UID secara manual.');
-    }
-  }
-
   const input = (hasError) => `w-full pl-11 pr-4 py-3 bg-white/[0.03] border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-60 ${
     hasError ? 'border-red-500/60 focus:border-red-500 focus:ring-red-500/40' : 'border-white/10 focus:border-gold/50 focus:ring-gold/50'}`;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Profil Saya</h1>
-        <p className="text-gray-400 mt-1">Kelola informasi akun Anda.</p>
-      </div>
+      <h1 className="text-2xl font-bold text-white">Profil</h1>
 
-      {/* Tata letak: satu kolom; mulai 1536 px kartu profil + informasi akun di kolom kiri, formulir di kolom lebar kanan. */}
+      {/* Satu kolom; mulai 1536 px kartu profil di kolom kiri dan formulir di kolom lebar kanan. */}
       <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6 items-start">
-        {/* Kartu profil */}
         <div className="bg-dark-secondary rounded-2xl border border-white/5 overflow-hidden min-w-0">
           <div className="h-28 sm:h-32 bg-gradient-to-r from-gold/20 via-gold/10 to-blue-500/10 relative">
             <div className="absolute -bottom-12 left-6">
@@ -104,7 +88,7 @@ export default function Profile() {
               </div>
             </div>
           </div>
-          <div className="pt-16 pb-6 px-6">
+          <div className="pt-16 pb-4 px-6">
             <h2 className="text-xl font-bold text-white break-words" data-testid="profile-name">{saved.name || '—'}</h2>
             <p className="text-gray-400 text-sm break-all" data-testid="profile-email">{email || '—'}</p>
             <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -118,14 +102,28 @@ export default function Profile() {
               </span>
             </div>
           </div>
+          <div className="px-6 pb-4 border-t border-white/5 mt-2">
+            <InfoRow icon={Calendar} label="Bergabung" testId="profile-joined-row">
+              <span className={`text-sm ${joined ? 'text-white' : 'text-gray-500'}`} data-testid="profile-joined">{joined || '—'}</span>
+            </InfoRow>
+            <InfoRow icon={Truck} label="Kendaraan" last testId="profile-vehicle-row">
+              {vehicle.assigned ? (
+                <div data-testid="profile-vehicle" data-assigned="true">
+                  <p className="text-sm text-white break-words" data-testid="profile-vehicle-label">{vehicle.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 font-mono break-all" data-testid="profile-vehicle-id">{vehicle.id}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-yellow-500/90" data-testid="profile-vehicle" data-assigned="false">Belum ditetapkan</p>
+              )}
+            </InfoRow>
+          </div>
         </div>
 
-        {/* Formulir */}
-        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-6 min-w-0 2xl:col-span-2 2xl:row-span-2">
+        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-6 min-w-0 2xl:col-span-2">
           <h3 className="text-lg font-semibold text-white mb-6">Informasi Pribadi</h3>
           <form onSubmit={handleSave} noValidate className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
+              <div className="sm:col-span-2">
                 <label htmlFor="profile-name-input" className="block text-sm font-medium text-gray-300 mb-2">Nama Lengkap</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -155,64 +153,18 @@ export default function Profile() {
                 </div>
                 {errors.phone && <p id="profile-phone-error" className="text-xs text-red-400 mt-1.5" data-testid="profile-phone-error">{errors.phone}</p>}
               </div>
-              <div>
-                <label htmlFor="profile-role-input" className="block text-sm font-medium text-gray-300 mb-2">Peran</label>
-                <div className="relative">
-                  <Shield className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                  <input id="profile-role-input" type="text" value={roleLabel(saved.role)} disabled readOnly
-                    className="w-full pl-11 pr-4 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-gray-500 cursor-not-allowed" />
-                </div>
-              </div>
             </div>
             <div className="pt-2 flex flex-wrap items-center gap-4">
               <button type="submit" disabled={saving} data-testid="profile-save"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-gold hover:bg-gold-dark disabled:opacity-60 text-dark-primary font-semibold rounded-xl transition-all duration-200">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {saving ? 'Menyimpan…' : 'Simpan Perubahan'}
+                {saving ? 'Menyimpan…' : 'Simpan'}
               </button>
               {dirty && !saving && <span className="text-xs text-gold" data-testid="profile-dirty">Ada perubahan yang belum disimpan</span>}
             </div>
           </form>
         </div>
-
-        {/* Informasi akun */}
-        <div className="bg-dark-secondary rounded-2xl border border-white/5 p-6 min-w-0">
-          <h3 className="text-lg font-semibold text-white mb-2">Informasi Akun</h3>
-          <InfoRow icon={Calendar} label="Tanggal Bergabung" testId="profile-joined-row">
-            <span className={`text-sm ${joined ? 'text-white' : 'text-gray-500'}`} data-testid="profile-joined">{joined || '—'}</span>
-          </InfoRow>
-          <InfoRow icon={Truck} label="Kendaraan" testId="profile-vehicle-row">
-            {vehicle.assigned ? (
-              <div data-testid="profile-vehicle" data-assigned="true">
-                <p className="text-sm text-white break-words" data-testid="profile-vehicle-label">{vehicle.label}</p>
-                <p className="text-xs text-gray-500 mt-0.5">ID kendaraan: <span className="font-mono text-gray-400 break-all" data-testid="profile-vehicle-id">{vehicle.id}</span></p>
-              </div>
-            ) : (
-              <div data-testid="profile-vehicle" data-assigned="false">
-                <p className="inline-flex items-center gap-1.5 text-sm text-yellow-500/90"><AlertCircle className="w-3.5 h-3.5" /> Belum ditetapkan</p>
-                <p className="text-xs text-gray-500 mt-0.5">Hubungi admin untuk menetapkan kendaraan.</p>
-              </div>
-            )}
-          </InfoRow>
-          <InfoRow icon={Key} label="User ID (UID)" last testId="profile-uid-row">
-            <span className="inline-flex items-center gap-2 max-w-full">
-              <span className="text-xs text-gray-400 font-mono break-all" data-testid="profile-uid">{uid || '—'}</span>
-              {uid && (
-                <button type="button" onClick={copyUid} aria-label="Salin UID" data-testid="profile-copy-uid"
-                  className="p-1.5 rounded-lg text-gray-500 hover:text-gold hover:bg-white/5 transition-colors flex-shrink-0">
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </span>
-          </InfoRow>
-        </div>
       </div>
-
-      {vehicle.assigned && (
-        <p className="text-xs text-gray-600">
-          Data kendaraan ditetapkan oleh admin. Pantau kendaraan Anda di <Link to="/monitoring" className="text-gold hover:underline">Live Monitoring</Link>.
-        </p>
-      )}
     </div>
   );
 }

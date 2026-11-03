@@ -86,7 +86,7 @@ export default function FleetTable({ rows, loading }) {
     return (
       <div className="py-16 flex flex-col items-center gap-3" data-testid="fleet-loading">
         <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
-        <p className="text-sm text-gray-500">Memuat daftar kendaraan…</p>
+        <p className="text-sm text-gray-500">Memuat…</p>
       </div>
     );
   }
@@ -97,10 +97,7 @@ export default function FleetTable({ rows, loading }) {
           <Truck className="w-6 h-6 text-gray-600" />
         </div>
         <p className="text-sm text-gray-400">Belum ada kendaraan terdaftar</p>
-        <p className="text-xs text-gray-600 max-w-sm">
-          Kendaraan muncul setelah pengemudi ditambahkan beserta ID kendaraannya di{' '}
-          <Link to="/admin/drivers" className="text-gold hover:underline">Kelola Pengemudi</Link>.
-        </p>
+        <Link to="/admin/drivers" className="text-xs text-gold hover:underline">Kelola Pengemudi</Link>
       </div>
     );
   }

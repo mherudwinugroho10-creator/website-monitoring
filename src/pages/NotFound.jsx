@@ -21,10 +21,7 @@ export default function NotFound() {
           <Truck className="w-10 h-10 text-gold" />
         </div>
         <h1 className="text-7xl font-bold text-gold mb-4">404</h1>
-        <h2 className="text-2xl font-semibold text-white mb-3">Halaman Tidak Ditemukan</h2>
-        <p className="text-sm text-gray-400 mb-8">
-          Halaman yang Anda cari tidak ada atau telah dipindahkan.
-        </p>
+        <h2 className="text-2xl font-semibold text-white mb-8">Halaman Tidak Ditemukan</h2>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             to={target.to}

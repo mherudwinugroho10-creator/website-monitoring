@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-import { Loader2, Info, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import Modal from '../common/Modal';
 import { db } from '../../services/firebase';
 import { inviteKey } from '../../utils/accountLogic';
@@ -110,7 +110,6 @@ export default function DriverFormModal({ mode, row, users, invites, adminUid, o
 
   return (
     <Modal open onClose={onClose} title={title} dismissible={!saving} testId="driver-form-modal"
-      subtitle={isCreate ? 'Kendaraan akan terpasang otomatis saat pengemudi mendaftar.' : undefined}
       footer={(
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
           <button type="button" onClick={onClose} disabled={saving}
@@ -125,28 +124,18 @@ export default function DriverFormModal({ mode, row, users, invites, adminUid, o
         </div>
       )}>
       <form id="driver-form" onSubmit={handleSubmit} noValidate className="p-6 space-y-4">
-        {isCreate && (
-          <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3.5">
-            <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-200/90 leading-relaxed">
-              Pengemudi membuat akunnya sendiri lewat halaman Daftar dengan email yang diisi di bawah.
-              Data kendaraan ini otomatis terpasang ke akunnya begitu ia selesai mendaftar.
-            </p>
-          </div>
-        )}
-
         <Field name="name" label="Nama Pengemudi" required error={errors.name}>
           <input type="text" autoComplete="off" placeholder="Nama lengkap" data-autofocus {...bind('name')} />
         </Field>
 
         <Field name="email" label="Email" required={isCreate} error={errors.email}
-          hint={isCreate ? 'Email yang akan dipakai pengemudi untuk mendaftar.' : 'Email tidak dapat diubah.'}>
+          hint={isCreate ? 'Email yang dipakai pengemudi untuk mendaftar. Kendaraan terpasang otomatis saat ia mendaftar.' : 'Email tidak dapat diubah.'}>
           <input type="email" autoComplete="off" placeholder="pengemudi@email.com" {...bind('email')} disabled={saving || !isCreate} />
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field name="vehicleId" label="ID Kendaraan" required={formMode !== 'edit-driver'} error={errors.vehicleId}
-            hint="Harus sama dengan ID kendaraan pada alat ESP32, mis. TRUCK_001.">
+            hint="Sama dengan ID kendaraan pada ESP32.">
             <input type="text" autoComplete="off" placeholder="TRUCK_001" spellCheck={false} {...bind('vehicleId')} />
           </Field>
           <Field name="vehiclePlate" label="Plat Nomor" error={errors.vehiclePlate}>
@@ -162,8 +151,7 @@ export default function DriverFormModal({ mode, row, users, invites, adminUid, o
           <div className="flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3.5" data-testid="vehicle-change-warning">
             <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-yellow-200/90 leading-relaxed">
-              Riwayat perilaku tersimpan per ID kendaraan. Setelah ID diganti, pengemudi ini melihat data kendaraan baru,
-              dan riwayat pada <span className="font-mono">{row.vehicleId}</span> tidak ikut berpindah.
+              Riwayat tersimpan per ID kendaraan. Riwayat pada <span className="font-mono">{row.vehicleId}</span> tidak ikut berpindah.
             </p>
           </div>
         )}

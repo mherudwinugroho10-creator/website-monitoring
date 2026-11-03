@@ -147,7 +147,7 @@ export default function EvaluationChart({ rows, heightClass = 'h-56' }) {
   if (!series.hasData) {
     return (
       <div className={`${heightClass} flex items-center justify-center text-gray-500 text-sm text-center px-4`} data-testid="evaluation-chart-empty">
-        Belum ada rekaman berkala atau event untuk ditampilkan pada grafik.
+        Belum ada data.
       </div>
     );
   }

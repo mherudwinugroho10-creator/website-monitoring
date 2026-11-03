@@ -87,7 +87,7 @@ export default function SpeedChart({ data, connected }) {
   if (data.length === 0) {
     return (
       <div className="h-48 flex items-center justify-center text-gray-500 text-sm text-center" data-testid="chart-empty">
-        {connected ? 'Mengumpulkan data kecepatan…' : 'Menunggu data dari alat untuk menampilkan grafik'}
+        {connected ? 'Mengumpulkan data…' : 'Menunggu data dari perangkat'}
       </div>
     );
   }
