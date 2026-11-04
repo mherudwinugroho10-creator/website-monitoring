@@ -2,17 +2,15 @@ import { initializeApp } from 'firebase/app';
 import { initializeAuth, browserSessionPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
+import { readFirebaseConfig } from '../config/firebaseEnv';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAnTEW9KJow9cx7ODBh2j03WWzRxV65OEE",
-  authDomain: "safedrive-monitoring.firebaseapp.com",
-  databaseURL: "https://safedrive-monitoring-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "safedrive-monitoring",
-  storageBucket: "safedrive-monitoring.firebasestorage.app",
-  messagingSenderId: "213736633596",
-  appId: "1:213736633596:web:10426b9e775a52ff0f5379",
-  measurementId: "G-2CB6G3J5PE"
-};
+// Konfigurasi dibaca dari environment variable (lihat .env.example). main.jsx sudah memeriksa kelengkapannya
+// dan menampilkan petunjuk bila kurang; pemeriksaan di sini memastikan Firebase tidak pernah
+// diinisialisasi dengan konfigurasi setengah jadi.
+const { config: firebaseConfig, missing, invalid } = readFirebaseConfig(import.meta.env);
+if (missing.length > 0 || invalid.length > 0) {
+  throw new Error(`Konfigurasi Firebase tidak lengkap: ${[...missing, ...invalid].join(', ')}`);
+}
 
 const app = initializeApp(firebaseConfig);
 

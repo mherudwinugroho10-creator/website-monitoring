@@ -15,8 +15,7 @@ import {
   PERFORMANCE_EVENTS_LIMIT, PERFORMANCE_TYPE_OPTIONS, driverVehicleIds, buildPerformanceRows, sortPerformanceRows,
   truncatedVehicles, performanceExportInfo, performanceFileName, buildAdminSessionGroups, nextConnectionCheckMs,
 } from '../../utils/adminLogic';
-import { writeBehaviorLogWorkbook } from '../../utils/exportExcel';
-import { writePerformanceWorkbook } from '../../utils/exportAdmin';
+import { loadBehaviorExport, loadAdminExport } from '../../utils/exportLoader';
 import SessionCard from '../../components/behavior/SessionCard';
 import DriverDetailModal from '../../components/admin/DriverDetailModal';
 
@@ -196,11 +195,12 @@ export default function DriverPerformance() {
     setPage(1);
   }
 
-  function exportRecap() {
+  async function exportRecap() {
     if (perf.rangeError) { toast.error(perf.rangeError); return; }
     if (!countsReady) { toast.error('Data masih dimuat. Coba lagi sebentar.'); return; }
     if (sorted.length === 0) { toast.error('Tidak ada data untuk diekspor.'); return; }
     try {
+      const { writePerformanceWorkbook } = await loadAdminExport();
       const exportedAt = Date.now();
       writePerformanceWorkbook({
         rows: sorted,
@@ -216,10 +216,11 @@ export default function DriverPerformance() {
     }
   }
 
-  function exportSession(group) {
+  async function exportSession(group) {
     if (group.rows.length === 0) { toast.error('Tidak ada data untuk diekspor.'); return; }
     const owner = directory.users.find((u) => u.id === group.driverId);
     try {
+      const { writeBehaviorLogWorkbook } = await loadBehaviorExport();
       const exportedAt = Date.now();
       writeBehaviorLogWorkbook({
         rows: group.rows,

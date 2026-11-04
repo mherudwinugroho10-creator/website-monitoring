@@ -11,7 +11,7 @@ import {
   TYPE_FILTER_OPTIONS, buildLogRows, filterRows, isFilterActive, summarizeRows, groupRowsBySession,
   buildExportInfo, exportFileName, formatDurationMs, UNASSIGNED_LABEL,
 } from '../../utils/behaviorLogic';
-import { writeBehaviorLogWorkbook } from '../../utils/exportExcel';
+import { loadBehaviorExport } from '../../utils/exportLoader';
 import NoVehicleNotice from '../../components/common/NoVehicleNotice';
 import LogTable from '../../components/behavior/LogTable';
 import SessionCard from '../../components/behavior/SessionCard';
@@ -84,7 +84,7 @@ export default function BehaviorLog() {
     setPage(1);
   }
 
-  function runExport({ rows, scope, session, sessionKey }) {
+  async function runExport({ rows, scope, session, sessionKey }) {
     if (rangeError) {
       toast.error(rangeError);
       return;
@@ -94,6 +94,7 @@ export default function BehaviorLog() {
       return;
     }
     try {
+      const { writeBehaviorLogWorkbook } = await loadBehaviorExport();
       const exportedAt = Date.now();
       writeBehaviorLogWorkbook({
         rows,

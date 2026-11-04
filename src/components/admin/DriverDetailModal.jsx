@@ -7,7 +7,7 @@ import { formatDateTime } from '../../utils/behaviorLogic';
 import {
   PERFORMANCE_EVENTS_LIMIT, buildEventDetailRows, detailExportInfo, detailFileName,
 } from '../../utils/adminLogic';
-import { writeDetailWorkbook } from '../../utils/exportAdmin';
+import { loadAdminExport } from '../../utils/exportLoader';
 
 const STEP = 50;
 const TYPE_STYLE = {
@@ -35,7 +35,7 @@ export default function DriverDetailModal({ row, filter, adminName, truncated, o
   const detail = useMemo(() => buildEventDetailRows(row.events), [row.events]);
   const visible = detail.slice(0, shown);
 
-  function handleExport() {
+  async function handleExport() {
     if (!row.ready) {
       toast.error('Data event kendaraan ini belum tersedia, jadi tidak bisa diekspor.');
       return;
@@ -45,6 +45,7 @@ export default function DriverDetailModal({ row, filter, adminName, truncated, o
       return;
     }
     try {
+      const { writeDetailWorkbook } = await loadAdminExport();
       const exportedAt = Date.now();
       writeDetailWorkbook({
         detailRows: detail,
