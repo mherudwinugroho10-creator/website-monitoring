@@ -7,6 +7,7 @@ import TiltIndicator from '../../components/monitoring/TiltIndicator';
 import BrakeStatus from '../../components/monitoring/BrakeStatus';
 import SpeedChart from '../../components/monitoring/SpeedChart';
 import DangerAlert from '../../components/monitoring/DangerAlert';
+import LatencyPanel from '../../components/monitoring/LatencyPanel';
 import NoVehicleNotice from '../../components/common/NoVehicleNotice';
 
 function formatClock(ms) {
@@ -35,7 +36,7 @@ export default function LiveMonitoring() {
   const { userData } = useAuth();
   const {
     hasVehicle, loaded, dataError, isConnected, liveData, speed, tilt, terrain, limits, activeLimit, isOverspeed,
-    events, speedHistory, serverNow, lastUpdate, latencyMs,
+    events, speedHistory, serverNow, lastUpdate, latencyMs, latencySamples, clearLatencySamples,
   } = useVehicle();
 
   const vehicleLabel = [userData?.vehicleName, userData?.vehiclePlate].filter(Boolean).join(' · ');
@@ -130,6 +131,8 @@ export default function LiveMonitoring() {
               <h3 className="text-base font-semibold text-white mb-4">Grafik Riwayat Kecepatan</h3>
               <SpeedChart data={speedHistory} connected={isConnected} />
             </div>
+
+            <LatencyPanel samples={latencySamples} onClear={clearLatencySamples} />
           </>
         )}
       </div>

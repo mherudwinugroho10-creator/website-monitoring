@@ -4,6 +4,7 @@ import { rtdb } from '../services/firebase';
 import { useAuth } from './AuthContext';
 import { useAlertContext } from './AlertContext';
 import { cleanVehicleId } from '../utils/accountLogic';
+import { appendLatencySample } from '../utils/latencyLogic';
 import {
   CONNECTION_TIMEOUT_MS, FUTURE_TOLERANCE_MS, NOTIFY_WINDOW_MS, EVENTS_LIMIT, SESSIONS_LIMIT,
   getTerrain, normalizeLimits, getActiveLimit, isOverspeed,
@@ -43,6 +44,7 @@ function emptyState(vehicleId) {
     rawLive: null,
     liveReceivedAt: null, // jam server saat snapshot live terakhir diterima listener
     liveInitial: true,    // snapshot pertama setelah berlangganan (belum dihitung sebagai latensi)
+    latencySamples: [],   // sampel latensi tiap pembaruan live (untuk panel Pengukuran Latensi)
     rawSettings: null,
     events: [],
     rawSessions: [],
@@ -65,8 +67,13 @@ function reducer(state, action) {
         rawLive: action.value,
         liveReceivedAt: action.receivedAt,
         liveInitial: action.initial,
+        latencySamples: appendLatencySample(state.latencySamples, {
+          live: action.value, receivedAt: action.receivedAt, offsetMs: action.offsetMs, initial: action.initial,
+        }),
         loaded: { ...state.loaded, live: true },
       };
+    case 'latencyClear':
+      return state.latencySamples.length ? { ...state, latencySamples: [] } : state;
     case 'settings':
       return { ...state, rawSettings: action.value, loaded: { ...state.loaded, settings: true } };
     case 'events':
@@ -110,6 +117,7 @@ export function VehicleProvider({ children }) {
   }, [vehicleId]);
 
   const serverNow = useCallback(() => Date.now() + offsetRef.current, []);
+  const clearLatencySamples = useCallback(() => dispatch({ type: 'latencyClear', vehicleId }), [vehicleId]);
 
   // ── Langganan RTDB (semua hanya baca) ─────────────────────
   useEffect(() => {
@@ -139,6 +147,7 @@ export function VehicleProvider({ children }) {
         vehicleId,
         value: snap.exists() ? normalizeLive(snap.val()) : null,
         receivedAt: Date.now() + offsetRef.current,
+        offsetMs: offsetRef.current,
         initial,
       });
     }, onError);
@@ -207,7 +216,7 @@ export function VehicleProvider({ children }) {
   const current = state.vehicleId === vehicleId ? state : emptyState(vehicleId);
   const { rawLive, rawSettings } = current;
 
-  // ── Status koneksi: data live <= 15 detik (jam server) ─────
+  // ── Status koneksi: data live <= 30 detik (jam server) ─────
   useEffect(() => {
     if (!vehicleId) return undefined;
     if (!rawLive || rawLive.timestamp === null) {
@@ -278,6 +287,8 @@ export function VehicleProvider({ children }) {
       lastUpdate: current.rawLive ? current.rawLive.timestamp : null,
       lastReceivedAt: current.liveReceivedAt,
       latencyMs,
+      latencySamples: current.latencySamples,
+      clearLatencySamples,
       speed,
       tilt,
 
@@ -297,7 +308,7 @@ export function VehicleProvider({ children }) {
       loaded: !hasVehicle || (current.loaded.live && current.loaded.settings && current.loaded.events && current.loaded.sessions),
       dataError: current.dataError,
     };
-  }, [vehicleId, current, rawSettings, serverNow, serverOffset]);
+  }, [vehicleId, current, rawSettings, serverNow, serverOffset, clearLatencySamples]);
 
   return <VehicleContext.Provider value={value}>{children}</VehicleContext.Provider>;
 }
