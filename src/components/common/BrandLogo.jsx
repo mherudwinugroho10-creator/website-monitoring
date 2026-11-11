@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import logoKampus from '../../assets/logo-kampus.jpg';
+import logoKampus from '../../assets/logo-kampus.jpeg';
 import {
   LOGO_CROPS, LOGO_ALT, HIDE_WATERMARK, CHANNEL_SLOPE, CHANNEL_INTERCEPT, cropGeometry,
 } from '../../utils/brandLogo';
