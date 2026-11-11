@@ -1,4 +1,5 @@
-import { Truck, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import BrandLogo from './BrandLogo';
 
 function NameList({ title, names, testId }) {
   return (
@@ -19,12 +20,7 @@ export default function ConfigError({ missing = [], invalid = [] }) {
   return (
     <div className="min-h-screen bg-dark-primary font-outfit flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-lg bg-dark-secondary rounded-2xl border border-white/5 p-6 sm:p-8" role="alert" data-testid="config-error">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-xl bg-gold/10 flex items-center justify-center flex-shrink-0">
-            <Truck className="w-5 h-5 text-gold" />
-          </div>
-          <span className="text-lg font-bold text-white">SAFE<span className="text-gold">DRIVE</span></span>
-        </div>
+        <BrandLogo className="w-full max-w-[300px] mb-6" />
 
         <div className="flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />

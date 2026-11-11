@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Truck, Shield, Activity, ArrowRight, Gauge, Mountain } from 'lucide-react';
+import { Shield, Activity, ArrowRight, Gauge, Mountain } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import BrandLogo from '../../components/common/BrandLogo';
 import { HERO, RESEARCHER, FOOTER_TEXT, monitoredItems } from '../../utils/landingContent';
 
 const ICONS = { gauge: Gauge, shield: Shield, mountain: Mountain, activity: Activity };
@@ -35,11 +36,9 @@ export default function LandingPage() {
       <header className="relative z-10">
         <nav aria-label="Navigasi utama" className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-20 gap-3">
-            <Link to="/" className="flex items-center gap-3 min-w-0" aria-label="SAFEDRIVE — beranda">
-              <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center flex-shrink-0">
-                <Truck className="w-5 h-5 text-gold" />
-              </div>
-              <span className="text-lg font-bold text-white">SAFE<span className="text-gold">DRIVE</span></span>
+            <Link to="/" data-testid="nav-brand" aria-label="Beranda"
+              className="block min-w-0 flex-1 max-w-[320px] rounded-lg transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">
+              <BrandLogo alt="" className="w-full" />
             </Link>
 
             <div className="flex items-center gap-4 flex-shrink-0">

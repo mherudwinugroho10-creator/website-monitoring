@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Truck, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import BrandLogo from '../common/BrandLogo';
 
 // Kerangka bersama halaman Masuk, Daftar, dan Login Admin: merek, kartu, judul, dan kolom isian
 // memakai komponen yang sama agar ketiganya selalu seragam.
@@ -17,12 +18,7 @@ export default function AuthShell({ title, children, footer }) {
 
         <div className="bg-dark-secondary rounded-2xl border border-white/[0.06] p-6 sm:p-8">
           <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center">
-                <Truck className="w-5 h-5 text-gold" />
-              </div>
-              <span className="text-lg font-bold text-white">SAFE<span className="text-gold">DRIVE</span></span>
-            </div>
+            <BrandLogo className="mx-auto w-full max-w-[340px] mb-6" />
             <h1 className="text-2xl font-bold text-white">{title}</h1>
           </div>
 

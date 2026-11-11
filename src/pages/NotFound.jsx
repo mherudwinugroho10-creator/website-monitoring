@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Truck, Home, ArrowLeft } from 'lucide-react';
+import { Home, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import BrandLogo from '../components/common/BrandLogo';
 
 // Tujuan tombol utama menyesuaikan status login: admin ke panel admin, pengemudi ke dashboard, tamu ke beranda.
 function homeTarget(auth) {
@@ -17,9 +18,7 @@ export default function NotFound() {
   return (
     <div className="min-h-screen bg-dark-primary flex items-center justify-center p-6">
       <div className="text-center max-w-md">
-        <div className="w-20 h-20 rounded-2xl bg-gold/10 flex items-center justify-center mx-auto mb-8">
-          <Truck className="w-10 h-10 text-gold" />
-        </div>
+        <BrandLogo className="mx-auto w-full max-w-xs mb-8" />
         <h1 className="text-7xl font-bold text-gold mb-4">404</h1>
         <h2 className="text-2xl font-semibold text-white mb-8">Halaman Tidak Ditemukan</h2>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">

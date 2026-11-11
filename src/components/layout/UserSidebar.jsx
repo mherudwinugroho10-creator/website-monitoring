@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Activity, FileText, User, LogOut, ChevronLeft, Truck } from 'lucide-react';
+import { LayoutDashboard, Activity, FileText, User, LogOut, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import BrandLogo from '../common/BrandLogo';
 import { toast } from 'react-toastify';
 
 export default function UserSidebar({ isOpen, setIsOpen }) {
@@ -52,16 +53,11 @@ export default function UserSidebar({ isOpen, setIsOpen }) {
         <div className="flex flex-col h-full">
 
           {/* Header */}
-          <div className="h-16 flex items-center justify-between px-4 border-b border-white/[0.06]">
-            <div className={`flex items-center gap-3 ${!isOpen ? 'lg:justify-center lg:w-full' : ''}`}>
-              <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center flex-shrink-0">
-                <Truck className="w-5 h-5 text-gold" />
-              </div>
-              {isOpen && (
-                <span className="text-lg font-bold text-white whitespace-nowrap">
-                  SAFE<span className="text-gold">DRIVE</span>
-                </span>
-              )}
+          <div className="h-16 flex items-center justify-between gap-3 px-4 border-b border-white/[0.06]">
+            <div className={`flex items-center min-w-0 ${isOpen ? 'flex-1' : 'lg:justify-center lg:w-full'}`}>
+              {isOpen
+                ? <BrandLogo className="w-full" />
+                : <BrandLogo variant="emblem" className="w-10 flex-shrink-0" />}
             </div>
             {isOpen && (
               <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors lg:hidden">
