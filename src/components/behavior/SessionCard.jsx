@@ -8,6 +8,7 @@ import LogTable from './LogTable';
 const STATUS_STYLE = {
   active: { dot: 'bg-green-400 animate-pulse', chip: 'bg-green-500/10 text-green-400' },
   unclosed: { dot: 'bg-yellow-500', chip: 'bg-yellow-500/10 text-yellow-400' },
+  autoClosed: { dot: 'bg-gray-600', chip: 'bg-white/5 text-gray-400' },
   closed: { dot: 'bg-gray-600', chip: 'bg-white/5 text-gray-400' },
 };
 
@@ -37,7 +38,8 @@ export default function SessionCard({ group, defaultOpen = false, serverNow, onE
             <span className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold text-white truncate" data-testid="session-label">{group.label}</span>
               {session && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${style.chip}`} data-testid="session-status">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${style.chip}`} data-testid="session-status"
+                  title={session.endEstimated ? 'Alat tidak mengirim penutupan sesi; akhir sesi diperkirakan dari rekaman terakhir.' : undefined}>
                   {session.statusLabel}
                 </span>
               )}
@@ -54,6 +56,11 @@ export default function SessionCard({ group, defaultOpen = false, serverNow, onE
                 <span className="text-xs text-gray-600" data-testid="session-duration">
                   {formatDurationMs(sessionDurationMs(session, serverNow()))}
                 </span>
+                {session.endEstimated && (
+                  <span className="text-xs text-gray-600" data-testid="session-end-estimate">
+                    Berakhir sekitar {formatDateTime(session.lastActivity)} (perkiraan)
+                  </span>
+                )}
               </span>
             ) : null}
             <span className="flex items-center gap-3 mt-2 text-xs flex-wrap" data-testid="session-counts">

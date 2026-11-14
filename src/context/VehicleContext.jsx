@@ -4,11 +4,11 @@ import { rtdb } from '../services/firebase';
 import { useAuth } from './AuthContext';
 import { useAlertContext } from './AlertContext';
 import { cleanVehicleId } from '../utils/accountLogic';
-import { appendLatencySample } from '../utils/latencyLogic';
+import { appendLatencySample, summarizeLatency } from '../utils/latencyLogic';
 import {
   CONNECTION_TIMEOUT_MS, FUTURE_TOLERANCE_MS, NOTIFY_WINDOW_MS, EVENTS_LIMIT, SESSIONS_LIMIT,
   getTerrain, normalizeLimits, getActiveLimit, isOverspeed,
-  normalizeLive, normalizeEvent, compareEventsDesc, normalizeSession, deriveSessions,
+  normalizeLive, normalizeEvent, compareEventsDesc, normalizeSession, deriveSessions, nextSessionStaleCheckMs,
   describeEvent,
 } from '../utils/vehicleLogic';
 
@@ -44,7 +44,7 @@ function emptyState(vehicleId) {
     rawLive: null,
     liveReceivedAt: null, // jam server saat snapshot live terakhir diterima listener
     liveInitial: true,    // snapshot pertama setelah berlangganan (belum dihitung sebagai latensi)
-    latencySamples: [],   // sampel latensi tiap pembaruan live (untuk panel Pengukuran Latensi)
+    latencySamples: [],   // sampel latensi terima tiap pembaruan live (untuk ringkasan di bawah status koneksi)
     rawSettings: null,
     events: [],
     rawSessions: [],
@@ -72,8 +72,6 @@ function reducer(state, action) {
         }),
         loaded: { ...state.loaded, live: true },
       };
-    case 'latencyClear':
-      return state.latencySamples.length ? { ...state, latencySamples: [] } : state;
     case 'settings':
       return { ...state, rawSettings: action.value, loaded: { ...state.loaded, settings: true } };
     case 'events':
@@ -103,6 +101,7 @@ export function VehicleProvider({ children }) {
 
   const [state, dispatch] = useReducer(reducer, vehicleId, emptyState);
   const [serverOffset, setServerOffset] = useState(0);
+  const [staleClock, setStaleClock] = useState(0); // jam server saat pewaktu "sesi terbuka tanpa aktivitas" terakhir berbunyi
 
   const offsetRef = useRef(0);
   const lastPushedRef = useRef(null);
@@ -117,7 +116,6 @@ export function VehicleProvider({ children }) {
   }, [vehicleId]);
 
   const serverNow = useCallback(() => Date.now() + offsetRef.current, []);
-  const clearLatencySamples = useCallback(() => dispatch({ type: 'latencyClear', vehicleId }), [vehicleId]);
 
   // ── Langganan RTDB (semua hanya baca) ─────────────────────
   useEffect(() => {
@@ -234,6 +232,17 @@ export function VehicleProvider({ children }) {
     return () => clearTimeout(timer);
   }, [vehicleId, rawLive, serverOffset]);
 
+  // ── Sesi terbuka yang sudah lama tanpa aktivitas ───────────
+  // Status berganti menjadi "Selesai (otomatis)" tepat saat melewati batas, walaupun tidak ada data baru.
+  const rawSessions = current.rawSessions;
+  useEffect(() => {
+    if (!vehicleId) return undefined;
+    const wait = nextSessionStaleCheckMs(rawSessions, Date.now() + serverOffset);
+    if (wait === null) return undefined;
+    const timer = setTimeout(() => setStaleClock(Date.now() + serverOffset), Math.min(Math.max(1, wait), 2147483647));
+    return () => clearTimeout(timer);
+  }, [vehicleId, rawSessions, serverOffset, staleClock]);
+
   // ── Riwayat kecepatan untuk grafik (hanya saat terhubung) ──
   // Tiap titik menyimpan batas aktif saat data diterima, sehingga garis batas pada grafik
   // ikut berubah ketika kendaraan berpindah antara jalan datar dan menurun.
@@ -268,12 +277,14 @@ export function VehicleProvider({ children }) {
     const limits = hasVehicle ? normalizeLimits(rawSettings) : { flat: null, downhill: null, flatIsDefault: true };
     const activeLimit = hasVehicle ? getActiveLimit(terrain, limits) : null;
 
-    // Latensi = jam server saat listener menerima data dikurangi timestamp server saat alat menulis.
+    // Latensi terima = jam server saat listener menerima data dikurangi timestamp server saat alat menulis.
     // Hanya untuk pembaruan sesudah halaman terbuka dan masih wajar (< batas koneksi).
+    // Nilai diteruskan APA ADANYA (boleh minus): selisih jam diestimasi SDK Firebase dari handshake koneksi,
+    // sehingga bisa meleset beberapa puluh sampai ratusan ms. Dulu nilai minus dipaksa 0 sehingga tampilan selalu "0".
     let latencyMs = null;
     if (!current.liveInitial && current.liveReceivedAt !== null && current.rawLive && current.rawLive.timestamp !== null) {
       const diff = current.liveReceivedAt - current.rawLive.timestamp;
-      if (diff < CONNECTION_TIMEOUT_MS) latencyMs = Math.max(0, diff);
+      if (diff < CONNECTION_TIMEOUT_MS) latencyMs = diff;
     }
 
     return {
@@ -287,8 +298,7 @@ export function VehicleProvider({ children }) {
       lastUpdate: current.rawLive ? current.rawLive.timestamp : null,
       lastReceivedAt: current.liveReceivedAt,
       latencyMs,
-      latencySamples: current.latencySamples,
-      clearLatencySamples,
+      latencyStats: summarizeLatency(current.latencySamples), // { n, meanMs, minMs, maxMs, negative } sejak halaman dibuka
       speed,
       tilt,
 
@@ -300,7 +310,7 @@ export function VehicleProvider({ children }) {
       settings: { speedLimit1: limits.flat, speedLimit2: limits.downhill }, // kompatibilitas halaman lama
 
       events: current.events,       // terbaru dulu; hanya overspeed dan forced_brake
-      sessions: deriveSessions(current.rawSessions, { isConnected }),
+      sessions: deriveSessions(current.rawSessions, { isConnected, serverNowMs: Math.max(staleClock, Date.now() + serverOffset) }),
       speedHistory: current.speedHistory,
 
       serverNow,
@@ -308,7 +318,7 @@ export function VehicleProvider({ children }) {
       loaded: !hasVehicle || (current.loaded.live && current.loaded.settings && current.loaded.events && current.loaded.sessions),
       dataError: current.dataError,
     };
-  }, [vehicleId, current, rawSettings, serverNow, serverOffset, clearLatencySamples]);
+  }, [vehicleId, current, rawSettings, serverNow, serverOffset, staleClock]);
 
   return <VehicleContext.Provider value={value}>{children}</VehicleContext.Provider>;
 }

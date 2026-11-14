@@ -11,7 +11,7 @@
 // ── Konstanta aturan skripsi ─────────────────────────────────
 export const TILT_DOWNHILL_THRESHOLD = 3;   // persen; tilt >= 3 -> MENURUN, selain itu DATAR
 export const DEFAULT_FLAT_LIMIT = 80;       // km/jam, batas standar jalan datar
-export const CONNECTION_TIMEOUT_MS = 15 * 1000; // tanpa data live selama ini -> alat dianggap terputus
+export const CONNECTION_TIMEOUT_MS = 30 * 1000; // tanpa data live selama ini -> alat dianggap terputus (alat mengirim tiap 5 detik)
 export const DANGER_WINDOW_MS = 5 * 1000;       // peringatan bahaya aktif bila event <= 5 detik
 export const NOTIFY_WINDOW_MS = 60 * 1000;      // event baru <= 60 detik masuk lonceng notifikasi
 export const FUTURE_TOLERANCE_MS = 10 * 1000;   // toleransi selisih jam (timestamp "di masa depan")
@@ -19,14 +19,21 @@ export const EVENT_TYPES = Object.freeze(['overspeed', 'forced_brake']);
 export const EVENTS_LIMIT = 200;   // jumlah event terbaru yang dimuat website (VehicleContext, Behavior Log)
 export const SESSIONS_LIMIT = 30;   // jumlah sesi terbaru yang dimuat website
 
+// Sesi yang masih terbuka di database (endTime = 0) tetapi sudah lama tanpa rekaman/event dianggap sudah berakhir.
+// Alat menutup sesinya sendiri setelah 5 menit diam dan mencatat rekaman tiap 1 menit, jadi 10 menit tanpa aktivitas
+// berarti sesi itu tidak akan dilanjutkan.
+export const SESSION_STALE_MS = 10 * 60 * 1000;
+
 export const SESSION_STATUS = Object.freeze({
-  ACTIVE: 'active',     // Berlangsung
-  UNCLOSED: 'unclosed', // Belum ditutup
-  CLOSED: 'closed',     // Selesai
+  ACTIVE: 'active',            // Berlangsung
+  UNCLOSED: 'unclosed',        // Belum ditutup (terbuka, alat terputus, baru saja aktif)
+  AUTO_CLOSED: 'autoClosed',   // Selesai (otomatis): terbuka di database tetapi sudah lama tanpa aktivitas
+  CLOSED: 'closed',            // Selesai
 });
 export const SESSION_STATUS_LABEL = Object.freeze({
   active: 'Berlangsung',
   unclosed: 'Belum ditutup',
+  autoClosed: 'Selesai (otomatis)',
   closed: 'Selesai',
 });
 
@@ -275,15 +282,36 @@ function lastActivityOf(session) {
   return last;
 }
 
+function isSessionStale(session, serverNowMs) {
+  return serverNowMs - lastActivityOf(session) > SESSION_STALE_MS;
+}
+
+// Jeda (ms) sampai ada sesi terbuka yang melewati batas SESSION_STALE_MS; null bila tidak ada.
+// Dipakai agar tampilan berganti status tepat waktunya walaupun tidak ada data baru.
+export function nextSessionStaleCheckMs(sessions, serverNowMs) {
+  let next = null;
+  for (const s of sessions || []) {
+    if (s.meta.endTime !== 0) continue;
+    const remaining = lastActivityOf(s) + SESSION_STALE_MS - serverNowMs;
+    if (remaining < 0) continue; // sudah lewat
+    const wait = remaining + 1;
+    if (next === null || wait < next) next = wait;
+  }
+  return next;
+}
+
 // Menambahkan status, aktivitas terakhir, dan hitungan event per sesi.
-//   Selesai       : endTime > 0
-//   Berlangsung   : endTime = 0, sesi terbaru, dan alat sedang terhubung
-//   Belum ditutup : endTime = 0 selain itu (alat mati/putus sebelum menutup sesi)
+//   Selesai            : endTime > 0
+//   Selesai (otomatis) : endTime = 0, tetapi sudah lebih dari SESSION_STALE_MS tanpa rekaman/event
+//                        (hanya dinilai bila serverNowMs diberikan; akhir sesi diperkirakan = aktivitas terakhir)
+//   Berlangsung        : endTime = 0, sesi terbaru, aktivitas masih baru, dan alat sedang terhubung
+//   Belum ditutup      : endTime = 0 selain itu (alat putus sebelum menutup sesi, belum lama)
 // Daftar hasil diurutkan dari sesi terbaru.
-export function deriveSessions(sessions, { isConnected = false } = {}) {
+export function deriveSessions(sessions, { isConnected = false, serverNowMs = null } = {}) {
   const sorted = [...sessions].sort(
     (a, b) => b.meta.startTime - a.meta.startTime || (a.key < b.key ? 1 : a.key > b.key ? -1 : 0)
   );
+  const canJudge = typeof serverNowMs === 'number' && Number.isFinite(serverNowMs);
   let newestOpenKey = null;
   for (const s of sorted) {
     if (s.meta.endTime === 0) { newestOpenKey = s.key; break; }
@@ -291,7 +319,8 @@ export function deriveSessions(sessions, { isConnected = false } = {}) {
   return sorted.map((s) => {
     let status = SESSION_STATUS.CLOSED;
     if (s.meta.endTime === 0) {
-      status = isConnected && s.key === newestOpenKey ? SESSION_STATUS.ACTIVE : SESSION_STATUS.UNCLOSED;
+      if (canJudge && isSessionStale(s, serverNowMs)) status = SESSION_STATUS.AUTO_CLOSED;
+      else status = isConnected && s.key === newestOpenKey ? SESSION_STATUS.ACTIVE : SESSION_STATUS.UNCLOSED;
     }
     const overspeed = s.events.filter((e) => e.type === 'overspeed').length;
     const forcedBrake = s.events.filter((e) => e.type === 'forced_brake').length;
@@ -299,6 +328,7 @@ export function deriveSessions(sessions, { isConnected = false } = {}) {
       ...s,
       status,
       statusLabel: SESSION_STATUS_LABEL[status],
+      endEstimated: status === SESSION_STATUS.AUTO_CLOSED,
       lastActivity: lastActivityOf(s),
       counts: { overspeed, forcedBrake, total: overspeed + forcedBrake },
     };

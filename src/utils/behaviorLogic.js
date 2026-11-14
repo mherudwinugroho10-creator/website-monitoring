@@ -272,26 +272,35 @@ export function groupRowsBySession(rows, sessions, { hideEmpty = false } = {}) {
 // ── Data grafik evaluasi ─────────────────────────────────────
 // Kecepatan dan kemiringan dari rekaman berkala (garis putus di antara dua sesi berbeda, tidak
 // menyambung lintas sesi); event overspeed dan forced brake sebagai penanda pada kecepatannya.
-// Sumbu X berupa timestamp (ms).
-export function buildEvaluationSeries(rows) {
+// Sumbu X berupa timestamp (ms). Bila layout (buildTimelineLayout) diberikan, sumbu X adalah garis waktu
+// "dipadatkan": jeda panjang antar segmen dibuang dan setiap titik membawa waktu aslinya di properti t.
+export function buildEvaluationSeries(rows, layout = null) {
   const asc = [...(rows || [])].sort((a, b) => a.timestamp - b.timestamp || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const speed = [];
   const tilt = [];
   const overspeed = [];
   const forcedBrake = [];
+  const point = (r, y) => (layout ? { x: layout.toX(r.timestamp), y, t: r.timestamp } : { x: r.timestamp, y });
   let prevRecord = null;
+  let prevX = null;
   for (const r of asc) {
     if (r.kind === KIND.RECORD) {
-      if (prevRecord && prevRecord.sessionKey !== r.sessionKey) {
-        const mid = Math.round((prevRecord.timestamp + r.timestamp) / 2);
+      const x = layout ? layout.toX(r.timestamp) : r.timestamp;
+      if (x === null) continue;
+      const breaks = prevRecord !== null && (prevRecord.sessionKey !== r.sessionKey
+        || (layout !== null && layout.segmentOf(prevRecord.timestamp) !== layout.segmentOf(r.timestamp)));
+      if (breaks) {
+        const mid = Math.round((prevX + x) / 2);
         speed.push({ x: mid, y: null });
         tilt.push({ x: mid, y: null });
       }
-      speed.push({ x: r.timestamp, y: r.speed });
-      tilt.push({ x: r.timestamp, y: r.tilt });
+      speed.push(point(r, r.speed));
+      tilt.push(point(r, r.tilt));
       prevRecord = r;
+      prevX = x;
     } else if (r.speed !== null && r.speed !== undefined) {
-      (r.kind === KIND.OVERSPEED ? overspeed : forcedBrake).push({ x: r.timestamp, y: r.speed });
+      if (layout && layout.toX(r.timestamp) === null) continue;
+      (r.kind === KIND.OVERSPEED ? overspeed : forcedBrake).push(point(r, r.speed));
     }
   }
   const all = [...speed, ...overspeed, ...forcedBrake].filter((p) => p.y !== null);
@@ -307,6 +316,87 @@ export function buildEvaluationSeries(rows) {
     hasTilt,
     minX: xs.length ? Math.min(...xs) : null,
     maxX: xs.length ? Math.max(...xs) : null,
+  };
+}
+
+// ── Garis waktu dipadatkan (grafik Gabungan) ─────────────────
+// Rekaman dari beberapa sesi biasanya berjauhan (berjam-jam sampai berhari-hari). Pada sumbu waktu biasa setiap sesi
+// menjadi garis tegak yang menumpuk di ujung grafik. Titik yang berjarak <= SEGMENT_GAP_MS dikelompokkan menjadi satu
+// segmen; jeda antar segmen dibuang dan diganti celah tetap bergaris putus. Dua titik dari SESI YANG SAMA baru dipisah
+// bila berjarak > SEGMENT_SAME_SESSION_GAP_MS (rekaman satu perjalanan yang agak jarang tetap tersambung).
+// Waktu asli tetap dipakai pada label sumbu dan tooltip. Satu segmen saja -> null (grafik memakai sumbu waktu biasa).
+export const SEGMENT_GAP_MS = 15 * 60 * 1000;
+export const SEGMENT_SAME_SESSION_GAP_MS = 60 * 60 * 1000;
+export const SEGMENT_MIN_SPAN_MS = 2 * 60 * 1000;
+
+function hasChartPoint(r) {
+  return isTime(r.timestamp) && (r.kind === KIND.RECORD || (r.speed !== null && r.speed !== undefined));
+}
+
+function segmentLabel(rows) {
+  const names = [];
+  for (const r of rows) if (r.sessionLabel && !names.includes(r.sessionLabel)) names.push(r.sessionLabel);
+  if (names.length === 0) return '';
+  return names.length <= 2 ? names.join(' · ') : `${names[0]} +${names.length - 1}`;
+}
+
+export function buildTimelineLayout(rows) {
+  const pts = (rows || []).filter(hasChartPoint).sort((a, b) => a.timestamp - b.timestamp);
+  const segs = [];
+  for (const r of pts) {
+    const last = segs[segs.length - 1];
+    const sameSession = last && Boolean(r.sessionKey) && r.sessionKey === last.lastKey;
+    if (last && r.timestamp - last.end <= (sameSession ? SEGMENT_SAME_SESSION_GAP_MS : SEGMENT_GAP_MS)) {
+      last.end = r.timestamp;
+      last.lastKey = r.sessionKey;
+      last.rows.push(r);
+    } else {
+      segs.push({ start: r.timestamp, end: r.timestamp, lastKey: r.sessionKey, rows: [r] });
+    }
+  }
+  if (segs.length < 2) return null;
+
+  const widths = segs.map((s) => Math.max(s.end - s.start, SEGMENT_MIN_SPAN_MS));
+  const gapW = Math.max(Math.round(widths.reduce((a, b) => a + b, 0) * 0.08), 60000);
+  let cursor = 0;
+  const segments = segs.map((s, i) => {
+    const x0 = cursor;
+    const x1 = x0 + widths[i];
+    cursor = x1 + gapW;
+    return { start: s.start, end: s.end, x0, x1, offset: (widths[i] - (s.end - s.start)) / 2, label: segmentLabel(s.rows) };
+  });
+  const total = cursor - gapW;
+
+  const segmentOf = (t) => {
+    for (let i = 0; i < segments.length; i++) if (t >= segments[i].start && t <= segments[i].end) return i;
+    return -1;
+  };
+  const toX = (t) => {
+    const i = segmentOf(t);
+    return i < 0 ? null : segments[i].x0 + segments[i].offset + (t - segments[i].start);
+  };
+
+  // Tick: 3 titik pada segmen >= 10 menit, 2 pada >= 3 menit, selain itu 1 di tengah. Tick pertama tiap segmen memuat tanggal.
+  const ticks = [];
+  for (const s of segments) {
+    const span = s.end - s.start;
+    const count = span >= 10 * 60000 ? 3 : span >= 3 * 60000 ? 2 : 1;
+    for (let k = 0; k < count; k++) {
+      const t = count === 1 ? Math.round((s.start + s.end) / 2) : Math.round(s.start + (span * k) / (count - 1));
+      const text = formatDateTime(t);
+      ticks.push({ x: toX(t), label: k === 0 ? `${text.slice(0, 5)} ${text.slice(11, 16)}` : text.slice(11, 16) });
+    }
+  }
+
+  const pad = Math.round(total * 0.02);
+  return {
+    segments,
+    total,
+    ticks,
+    gaps: segments.slice(1).map((s, i) => (segments[i].x1 + s.x0) / 2),
+    window: { min: -pad, max: total + pad },
+    segmentOf,
+    toX,
   };
 }
 
@@ -388,7 +478,9 @@ export function buildExportInfo({ driverName, vehicleLabel, scope, filter, rowCo
     info.push(['Sesi', (session.meta && session.meta.label) || session.key]);
     info.push(['Status sesi', session.statusLabel]);
     info.push(['Mulai', formatDateTime(session.meta.startTime)]);
-    info.push(['Selesai', session.meta.endTime > 0 ? formatDateTime(session.meta.endTime) : '—']);
+    info.push(['Selesai', session.meta.endTime > 0
+      ? formatDateTime(session.meta.endTime)
+      : session.endEstimated ? `${formatDateTime(session.lastActivity)} (perkiraan)` : '—']);
     info.push(['Durasi', sessionDurationText || '—']);
   }
   info.push(['Filter tipe data', typeLabelOf(filter && filter.type)]);

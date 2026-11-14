@@ -7,11 +7,14 @@ import TiltIndicator from '../../components/monitoring/TiltIndicator';
 import BrakeStatus from '../../components/monitoring/BrakeStatus';
 import SpeedChart from '../../components/monitoring/SpeedChart';
 import DangerAlert from '../../components/monitoring/DangerAlert';
-import LatencyPanel from '../../components/monitoring/LatencyPanel';
 import NoVehicleNotice from '../../components/common/NoVehicleNotice';
 
 function formatClock(ms) {
   return new Date(ms).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatMs(ms) {
+  return `${formatNumber(Math.round(ms), 0)} ms`;
 }
 
 function StatCard({ icon: Icon, title, value, unit, note, tone = 'normal', testId }) {
@@ -36,7 +39,7 @@ export default function LiveMonitoring() {
   const { userData } = useAuth();
   const {
     hasVehicle, loaded, dataError, isConnected, liveData, speed, tilt, terrain, limits, activeLimit, isOverspeed,
-    events, speedHistory, serverNow, lastUpdate, latencyMs, latencySamples, clearLatencySamples,
+    events, speedHistory, serverNow, lastUpdate, latencyMs, latencyStats,
   } = useVehicle();
 
   const vehicleLabel = [userData?.vehicleName, userData?.vehiclePlate].filter(Boolean).join(' · ');
@@ -69,8 +72,18 @@ export default function LiveMonitoring() {
               {lastUpdate !== null && (
                 <p data-testid="last-update" className="text-[11px] text-gray-500">
                   Pembaruan terakhir {formatClock(lastUpdate)}
-                  {latencyMs !== null && ` · Latensi ${formatNumber(latencyMs / 1000, 2)} dtk`}
+                  {latencyMs !== null && ` · Latensi ${formatNumber(latencyMs / 1000, 3)} dtk`}
                 </p>
+              )}
+              {latencyStats.n > 0 && (
+                <>
+                  <p data-testid="latency-receive" className="text-[11px] text-gray-500">
+                    Latensi terima: rata-rata {formatMs(latencyStats.meanMs)} · terkecil {formatMs(latencyStats.minMs)} · terbesar {formatMs(latencyStats.maxMs)} (n = {latencyStats.n})
+                  </p>
+                  <p data-testid="latency-note" className="text-[11px] text-gray-600 sm:text-right max-w-xs sm:max-w-sm">
+                    Latensi terima = jam browser menerima data − timestamp server saat alat menulis (Firebase ke browser). Nilai minus berarti estimasi selisih jam browser dengan server belum presisi.
+                  </p>
+                </>
               )}
             </div>
           )}
@@ -131,8 +144,6 @@ export default function LiveMonitoring() {
               <h3 className="text-base font-semibold text-white mb-4">Grafik Riwayat Kecepatan</h3>
               <SpeedChart data={speedHistory} connected={isConnected} />
             </div>
-
-            <LatencyPanel samples={latencySamples} onClear={clearLatencySamples} />
           </>
         )}
       </div>
